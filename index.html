@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Cube Fingertip Test</title>
+  <title>3D Cube Hand Tracking Test</title>
   <style>
     body {
       margin: 0;
@@ -37,6 +37,12 @@
       padding: 12px 16px;
       border-radius: 8px;
       z-index: 10;
+      max-width: 260px;
+    }
+    #ui-overlay p {
+      margin: 8px 0 0 0;
+      font-size: 13px;
+      line-height: 1.4;
     }
     button {
       background: #007aff;
@@ -48,8 +54,63 @@
       font-weight: 600;
       cursor: pointer;
     }
+
+    /* Bottom control bar */
+    #control-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      box-sizing: border-box;
+    }
+    .control-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 10px;
+      border-radius: 999px;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .control-chip input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #007aff;
+      cursor: pointer;
+      margin: 0;
+    }
+    .control-chip.skeleton-chip {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .chip-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    #control-divider {
+      width: 1px;
+      align-self: stretch;
+      background: rgba(255, 255, 255, 0.2);
+      margin: 2px 2px;
+    }
   </style>
-  
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -58,8 +119,17 @@
   <div id="canvas-container"></div>
 
   <div id="ui-overlay">
-    <button id="start-btn">Start Camera & Tracking</button>
+    <button id="start-btn">Start Camera &amp; Tracking</button>
     <p id="status">Status: Tap button to start</p>
+  </div>
+
+  <div id="control-bar">
+    <label class="control-chip skeleton-chip">
+      <input type="checkbox" id="toggle-skeleton" checked />
+      Skeleton
+    </label>
+    <div id="control-divider"></div>
+    <!-- Point checkboxes are injected by script, one per POINTS entry -->
   </div>
 
   <script type="module">
@@ -69,20 +139,48 @@
     const startBtn = document.getElementById('start-btn');
     const statusText = document.getElementById('status');
     const container = document.getElementById('canvas-container');
+    const controlBar = document.getElementById('control-bar');
+    const skeletonToggle = document.getElementById('toggle-skeleton');
 
     let handLandmarker = null;
     let lastVideoTime = -1;
     let isTracked = false;
 
-    const currentPos = new THREE.Vector3(0, 0, 0);
-    const targetPos = new THREE.Vector3(0, 0, 0);
     const LERP_FACTOR = 0.25;
-
-    let cubeScale = 0;
     const TARGET_SCALE = 0.15;
     const SCALE_SPEED = 0.08;
+    const UNPROJECT_DISTANCE = 1.8;
 
-    // Three.js Setup
+    // Reused scratch objects (avoid per-frame allocation)
+    const _ndc = new THREE.Vector3();
+    const _dir = new THREE.Vector3();
+
+    // ---- Trackable points -------------------------------------------------
+    // MediaPipe Hand landmark indices:
+    // 0 wrist, 4 thumb tip, 8 index tip, 12 middle tip, 16 ring tip, 20 pinky tip
+    // "palm" is computed as the average of wrist + four MCP joints (0,5,9,13,17)
+    const POINTS = [
+      { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  default: false },
+      { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  default: false },
+      { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  default: true  },
+      { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, default: false },
+      { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, default: false },
+      { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, default: false },
+      { id: 'palm',   label: 'Palm',       color: '#ff9800', landmark: 'palm', default: false }
+    ];
+    const PALM_LANDMARKS = [0, 5, 9, 13, 17];
+
+    // Standard MediaPipe hand connections, used to draw the skeleton
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],           // thumb
+      [0,5],[5,6],[6,7],[7,8],           // index
+      [5,9],[9,10],[10,11],[11,12],      // middle
+      [9,13],[13,14],[14,15],[15,16],    // ring
+      [13,17],[17,18],[18,19],[19,20],   // pinky
+      [0,17]                              // palm base
+    ];
+
+    // ---- Three.js setup -----------------------------------------------------
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 2;
@@ -92,15 +190,114 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshNormalMaterial();
-    const cube = new THREE.Mesh(geometry, material);
-    cube.scale.set(0, 0, 0);
-    scene.add(cube);
+    // One tracked "cube" object per point, each with its own smoothing state
+    const trackers = {};
+    POINTS.forEach(p => {
+      const geometry = new THREE.BoxGeometry(1, 1, 1);
+      const material = new THREE.MeshBasicMaterial({ color: p.color, wireframe: false });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.scale.set(0, 0, 0);
+      scene.add(mesh);
+
+      trackers[p.id] = {
+        mesh,
+        enabled: p.default,
+        active: false,          // true once we've seen this point at least once this session
+        currentPos: new THREE.Vector3(),
+        targetPos: new THREE.Vector3(),
+        scale: 0
+      };
+    });
+
+    // Skeleton drawn as a single LineSegments object, positions updated per frame
+    const MAX_SKELETON_POINTS = 21;
+    const skeletonGeometry = new THREE.BufferGeometry();
+    const skeletonPositions = new Float32Array(HAND_CONNECTIONS.length * 2 * 3);
+    skeletonGeometry.setAttribute('position', new THREE.BufferAttribute(skeletonPositions, 3));
+    const skeletonMaterial = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 });
+    const skeletonLines = new THREE.LineSegments(skeletonGeometry, skeletonMaterial);
+    skeletonLines.visible = skeletonToggle.checked;
+    scene.add(skeletonLines);
+
+    // World-space cache for every raw landmark this frame (used by skeleton + palm calc)
+    const worldPositions = new Array(21).fill(null).map(() => new THREE.Vector3());
+    let landmarksVisibleThisFrame = false;
+
+    // ---- Build bottom control bar checkboxes --------------------------------
+    POINTS.forEach(p => {
+      const label = document.createElement('label');
+      label.className = 'control-chip';
+      label.innerHTML = `
+        <span class="chip-dot" style="background:${p.color}"></span>
+        <input type="checkbox" id="toggle-${p.id}" ${p.default ? 'checked' : ''} />
+        ${p.label}
+      `;
+      controlBar.appendChild(label);
+
+      label.querySelector('input').addEventListener('change', (e) => {
+        trackers[p.id].enabled = e.target.checked;
+      });
+    });
+
+    skeletonToggle.addEventListener('change', (e) => {
+      skeletonLines.visible = e.target.checked;
+    });
+
+    // ---- Camera / aspect-ratio correction ------------------------------------
+    // object-fit: cover crops the video to fill the screen, but MediaPipe's
+    // normalized landmark coordinates (0-1) are relative to the FULL, uncropped
+    // camera frame. Without remapping, tracked points drift from their visible
+    // on-screen position (worse near the edges). This maps a normalized
+    // landmark coordinate into the visible "cover" crop window.
+    function mapToVisible(x, y) {
+      const videoAspect = video.videoWidth / video.videoHeight;
+      const screenAspect = window.innerWidth / window.innerHeight;
+      let visW = 1, visH = 1;
+
+      if (screenAspect > videoAspect) {
+        visH = videoAspect / screenAspect; // top/bottom cropped
+      } else {
+        visW = screenAspect / videoAspect; // left/right cropped
+      }
+
+      const startX = (1 - visW) / 2;
+      const startY = (1 - visH) / 2;
+
+      return {
+        x: THREE.MathUtils.clamp((x - startX) / visW, 0, 1),
+        y: THREE.MathUtils.clamp((y - startY) / visH, 0, 1)
+      };
+    }
+
+    function landmarkToWorld(landmark, outVec) {
+      const mapped = mapToVisible(landmark.x, landmark.y);
+      const normalizedX = -(mapped.x * 2 - 1);
+      const normalizedY = -(mapped.y * 2 - 1);
+
+      _ndc.set(normalizedX, normalizedY, 0.5);
+      _ndc.unproject(camera);
+      _dir.copy(_ndc).sub(camera.position).normalize();
+      outVec.copy(camera.position).add(_dir.multiplyScalar(UNPROJECT_DISTANCE));
+      return outVec;
+    }
+
+    // ---- MediaPipe setup, with GPU -> CPU fallback ---------------------------
+    async function createHandLandmarker(visionFiles, delegate) {
+      return HandLandmarker.createFromOptions(visionFiles, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate
+        },
+        runningMode: "VIDEO",
+        numHands: 1,
+        minHandDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+    }
 
     async function startApp() {
       statusText.innerText = "Status: Requesting camera...";
-      
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -108,22 +305,27 @@
         video.srcObject = stream;
         await video.play();
 
+        // Make sure we actually have frame dimensions before we start detecting;
+        // play() can resolve slightly before metadata (videoWidth/videoHeight) is ready.
+        if (!video.videoWidth || !video.videoHeight) {
+          await new Promise(resolve => {
+            video.addEventListener('loadedmetadata', resolve, { once: true });
+          });
+        }
+
         statusText.innerText = "Status: Loading MediaPipe...";
 
         const visionFiles = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
         );
 
-        handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
-          baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-            delegate: "GPU"
-          },
-          runningMode: "VIDEO",
-          numHands: 1,
-          minHandDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5
-        });
+        try {
+          handLandmarker = await createHandLandmarker(visionFiles, "GPU");
+        } catch (gpuErr) {
+          console.warn("GPU delegate failed, falling back to CPU:", gpuErr);
+          statusText.innerText = "Status: GPU unavailable, using CPU...";
+          handLandmarker = await createHandLandmarker(visionFiles, "CPU");
+        }
 
         statusText.innerText = "Status: Tracking Active";
         startBtn.style.display = 'none';
@@ -137,40 +339,83 @@
 
     startBtn.addEventListener('click', startApp);
 
+    // ---- Main render loop -----------------------------------------------------
     function render() {
       requestAnimationFrame(render);
 
-      if (video.currentTime !== lastVideoTime && handLandmarker) {
+      if (video.currentTime !== lastVideoTime && handLandmarker && video.videoWidth > 0) {
         lastVideoTime = video.currentTime;
         const results = handLandmarker.detectForVideo(video, performance.now());
 
         if (results.landmarks && results.landmarks.length > 0) {
           isTracked = true;
-          const indexTip = results.landmarks[0][8];
+          landmarksVisibleThisFrame = true;
+          const hand = results.landmarks[0];
 
-          const normalizedX = -(indexTip.x * 2 - 1);
-          const normalizedY = -(indexTip.y * 2 - 1);
+          // Cache every raw landmark's world position once per frame
+          for (let i = 0; i < hand.length; i++) {
+            landmarkToWorld(hand[i], worldPositions[i]);
+          }
 
-          const vector = new THREE.Vector3(normalizedX, normalizedY, 0.5);
-          vector.unproject(camera);
-          const dir = vector.sub(camera.position).normalize();
-          targetPos.copy(camera.position).add(dir.multiplyScalar(1.8));
+          // Update each enabled tracker's target position
+          POINTS.forEach(p => {
+            const t = trackers[p.id];
+            if (p.landmark === 'palm') {
+              const avg = t.targetPos.set(0, 0, 0);
+              PALM_LANDMARKS.forEach(idx => avg.add(worldPositions[idx]));
+              avg.multiplyScalar(1 / PALM_LANDMARKS.length);
+            } else {
+              t.targetPos.copy(worldPositions[p.landmark]);
+            }
+            t.active = true;
+          });
         } else {
           isTracked = false;
+          landmarksVisibleThisFrame = false;
         }
       }
 
-      if (isTracked) {
-        currentPos.lerp(targetPos, LERP_FACTOR);
-        cube.position.copy(currentPos);
-        if (cubeScale < TARGET_SCALE) cubeScale = Math.min(TARGET_SCALE, cubeScale + SCALE_SPEED);
-      } else {
-        if (cubeScale > 0) cubeScale = Math.max(0, cubeScale - SCALE_SPEED);
-      }
+      // Animate each point's cube (position lerp + scale in/out)
+      POINTS.forEach(p => {
+        const t = trackers[p.id];
+        const shouldShow = t.enabled && isTracked && t.active;
 
-      cube.scale.set(cubeScale, cubeScale, cubeScale);
-      cube.rotation.x += 0.02;
-      cube.rotation.y += 0.02;
+        if (shouldShow) {
+          t.currentPos.lerp(t.targetPos, LERP_FACTOR);
+          t.mesh.position.copy(t.currentPos);
+          if (t.scale < TARGET_SCALE) t.scale = Math.min(TARGET_SCALE, t.scale + SCALE_SPEED);
+        } else {
+          if (t.scale > 0) t.scale = Math.max(0, t.scale - SCALE_SPEED);
+        }
+
+        t.mesh.scale.set(t.scale, t.scale, t.scale);
+        if (t.scale > 0) {
+          t.mesh.rotation.x += 0.02;
+          t.mesh.rotation.y += 0.02;
+        }
+      });
+
+      // Update skeleton line positions
+      if (skeletonLines.visible && landmarksVisibleThisFrame) {
+        const posAttr = skeletonGeometry.getAttribute('position');
+        HAND_CONNECTIONS.forEach(([a, b], i) => {
+          const pa = worldPositions[a];
+          const pb = worldPositions[b];
+          posAttr.setXYZ(i * 2, pa.x, pa.y, pa.z);
+          posAttr.setXYZ(i * 2 + 1, pb.x, pb.y, pb.z);
+        });
+        posAttr.needsUpdate = true;
+        skeletonLines.visible = true;
+      } else if (skeletonToggle.checked && !landmarksVisibleThisFrame) {
+        // Hand out of frame: keep the toggle "on" but hide the (stale) lines
+        skeletonLines.visible = false;
+      } else if (!skeletonToggle.checked) {
+        skeletonLines.visible = false;
+      }
+      // Re-show once hand reappears, if the user still wants it on
+      if (skeletonToggle.checked && landmarksVisibleThisFrame) {
+        skeletonLines.visible = true;
+      }
 
       renderer.render(scene, camera);
     }
