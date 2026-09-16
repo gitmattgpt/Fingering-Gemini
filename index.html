@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Hand & Face Ball Tracking Test</title>
+  <title>3D Holistic Ball Tracking Test</title>
   <style>
     body {
       margin: 0;
@@ -89,7 +89,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      max-height: 45vh;
+      max-height: 48vh;
     }
     #control-drawer.open {
       transform: translateY(0);
@@ -98,7 +98,7 @@
     /* Tabs */
     .tab-bar {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       justify-content: center;
       border-bottom: 1px solid rgba(255,255,255,0.15);
       padding-bottom: 8px;
@@ -107,9 +107,9 @@
       background: transparent;
       border: 1px solid rgba(255,255,255,0.2);
       color: #aaa;
-      padding: 6px 16px;
+      padding: 6px 12px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
     }
@@ -123,7 +123,7 @@
     .tab-content {
       display: none;
       overflow-y: auto;
-      max-height: 30vh;
+      max-height: 32vh;
     }
     .tab-content.active {
       display: flex;
@@ -176,7 +176,7 @@
   <div id="canvas-container"></div>
 
   <div id="status-overlay">
-    <button id="start-btn">Start Camera & Tracking</button>
+    <button id="start-btn">Start Holistic Tracking</button>
     <p id="status" style="margin:8px 0 0 0;">Status: Tap button to start</p>
   </div>
 
@@ -186,27 +186,35 @@
     <div class="tab-bar">
       <button class="tab-btn active" id="tab-btn-hand">Hand Targets</button>
       <button class="tab-btn" id="tab-btn-face">Face Targets</button>
+      <button class="tab-btn" id="tab-btn-body">Body Targets</button>
     </div>
 
-    <!-- Hand Tab Content -->
+    <!-- Hand Tab -->
     <div class="tab-content active" id="tab-hand">
       <div class="chip-item">
         <label class="sub-group">
-          <input type="checkbox" id="toggle-skeleton" checked />
-          Skeleton Overlay
+          <input type="checkbox" id="toggle-hand-skel" checked />
+          Hand Skeleton
         </label>
       </div>
-      <!-- Hand point chips generated dynamically -->
     </div>
 
-    <!-- Face Tab Content -->
-    <div class="tab-content" id="tab-face">
-      <!-- Face point chips generated dynamically -->
+    <!-- Face Tab -->
+    <div class="tab-content" id="tab-face"></div>
+
+    <!-- Body Tab -->
+    <div class="tab-content" id="tab-body">
+      <div class="chip-item">
+        <label class="sub-group">
+          <input type="checkbox" id="toggle-pose-skel" checked />
+          Body Skeleton
+        </label>
+      </div>
     </div>
   </div>
 
   <script type="module">
-    import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+    import { HolisticLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
     // --- DOM Elements ---
     const video = document.getElementById('webcam');
@@ -216,50 +224,57 @@
     const drawer = document.getElementById('control-drawer');
     const menuToggleBtn = document.getElementById('menu-toggle-btn');
 
-    // Drawer Show/Hide behavior
+    // UI Drawer
     menuToggleBtn.addEventListener('click', () => {
       const isOpen = drawer.classList.toggle('open');
       menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
     });
 
     // Tab Navigation
-    const tabHandBtn = document.getElementById('tab-btn-hand');
-    const tabFaceBtn = document.getElementById('tab-btn-face');
-    const tabHand = document.getElementById('tab-hand');
-    const tabFace = document.getElementById('tab-face');
+    const tabs = [
+      { btn: document.getElementById('tab-btn-hand'), content: document.getElementById('tab-hand') },
+      { btn: document.getElementById('tab-btn-face'), content: document.getElementById('tab-face') },
+      { btn: document.getElementById('tab-btn-body'), content: document.getElementById('tab-body') }
+    ];
 
-    tabHandBtn.addEventListener('click', () => {
-      tabHandBtn.classList.add('active');
-      tabFaceBtn.classList.remove('active');
-      tabHand.classList.add('active');
-      tabFace.classList.remove('active');
+    tabs.forEach(({ btn, content }) => {
+      btn.addEventListener('click', () => {
+        tabs.forEach(t => {
+          t.btn.classList.remove('active');
+          t.content.classList.remove('active');
+        });
+        btn.classList.add('active');
+        content.classList.add('active');
+      });
     });
 
-    tabFaceBtn.addEventListener('click', () => {
-      tabFaceBtn.classList.add('active');
-      tabHandBtn.classList.remove('active');
-      tabFace.classList.add('active');
-      tabHand.classList.remove('active');
-    });
-
-    // --- Tracking Targets Config ---
+    // --- Target Categories ---
     const HAND_POINTS = [
-      { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  defaultShow: false },
-      { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  defaultShow: false },
-      { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  defaultShow: true  },
-      { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, defaultShow: false },
-      { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, defaultShow: false },
-      { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, defaultShow: false },
-      { id: 'palm',   label: 'Palm',       color: '#ff9800', landmark: 'palm', defaultShow: false }
+      { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  category: 'hand', defaultShow: false },
+      { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  category: 'hand', defaultShow: false },
+      { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  category: 'hand', defaultShow: true  },
+      { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, category: 'hand', defaultShow: false },
+      { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, category: 'hand', defaultShow: false },
+      { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, category: 'hand', defaultShow: false },
+      { id: 'palm',   label: 'Palm',       color: '#ff9800', landmark: 'palm', category: 'hand', defaultShow: false }
     ];
 
     const FACE_POINTS = [
-      { id: 'nose',     label: 'Nose Tip',  color: '#ff4081', landmark: 1,   defaultShow: true  },
-      { id: 'forehead', label: 'Forehead',  color: '#ab47bc', landmark: 10,  defaultShow: false },
-      { id: 'chin',     label: 'Chin',      color: '#26a69a', landmark: 152, defaultShow: false },
-      { id: 'eyeL',     label: 'Left Eye',  color: '#42a5f5', landmark: 33,  defaultShow: false },
-      { id: 'eyeR',     label: 'Right Eye', color: '#5c6bc0', landmark: 263, defaultShow: false },
-      { id: 'mouth',    label: 'Mouth',     color: '#ff7043', landmark: 13,  defaultShow: false }
+      { id: 'nose',     label: 'Nose Tip',  color: '#ff4081', landmark: 1,   category: 'face', defaultShow: true  },
+      { id: 'forehead', label: 'Forehead',  color: '#ab47bc', landmark: 10,  category: 'face', defaultShow: false },
+      { id: 'chin',     label: 'Chin',      color: '#26a69a', landmark: 152, category: 'face', defaultShow: false },
+      { id: 'eyeL',     label: 'Left Eye',  color: '#42a5f5', landmark: 33,  category: 'face', defaultShow: false },
+      { id: 'eyeR',     label: 'Right Eye', color: '#5c6bc0', landmark: 263, category: 'face', defaultShow: false },
+      { id: 'mouth',    label: 'Mouth',     color: '#ff7043', landmark: 13,  category: 'face', defaultShow: false }
+    ];
+
+    const BODY_POINTS = [
+      { id: 'shL',  label: 'L Shoulder', color: '#e91e63', landmark: 11, category: 'pose', defaultShow: true  },
+      { id: 'shR',  label: 'R Shoulder', color: '#9c27b0', landmark: 12, category: 'pose', defaultShow: false },
+      { id: 'elbL', label: 'L Elbow',    color: '#3f51b5', landmark: 13, category: 'pose', defaultShow: false },
+      { id: 'elbR', label: 'R Elbow',    color: '#00bcd4', landmark: 14, category: 'pose', defaultShow: false },
+      { id: 'kneL', label: 'L Knee',     color: '#4caf50', landmark: 25, category: 'pose', defaultShow: false },
+      { id: 'kneR', label: 'R Knee',     color: '#cddc39', landmark: 26, category: 'pose', defaultShow: false }
     ];
 
     const PALM_LANDMARKS = [0, 5, 9, 13, 17];
@@ -268,14 +283,18 @@
       [5,9],[9,10],[10,11],[11,12], [9,13],[13,14],[14,15],[15,16],
       [13,17],[17,18],[18,19],[19,20], [0,17]
     ];
+    const POSE_CONNECTIONS = [
+      [11,12], [11,13], [13,15], [12,14], [14,16], [11,23], [12,24], [23,24],
+      [23,25], [24,26], [25,27], [26,28]
+    ];
 
-    // Global Ball State: Default ball target is 'index'
+    // Global Ball State: Starts on 'index'
     let currentBallTargetId = 'index';
-    const PROXIMITY_TRANSFER_THRESHOLD = 0.16; // 3D distance units for transfer
+    const PROXIMITY_TRANSFER_THRESHOLD = 0.16; // 3D units for collision transfer
+    const PINCH_THRESHOLD = 0.08;              // 3D units between thumb & index tip for gesture trigger
 
     // --- State & Scene Setup ---
-    let handLandmarker = null;
-    let faceLandmarker = null;
+    let holisticLandmarker = null;
     let lastVideoTime = -1;
 
     const LERP_FACTOR = 0.25;
@@ -295,12 +314,10 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Trackers dictionary for all landmarks (Hand + Face)
     const trackers = {};
 
-    function registerPoints(pointsList, isFace) {
+    function registerPoints(pointsList) {
       pointsList.forEach(p => {
-        // Create 3D Cube Marker Mesh
         const geometry = new THREE.BoxGeometry(1, 1, 1);
         const material = new THREE.MeshBasicMaterial({ color: p.color });
         const mesh = new THREE.Mesh(geometry, material);
@@ -313,7 +330,7 @@
           mesh,
           enabled: p.defaultShow,
           landmark: p.landmark,
-          isFace,
+          category: p.category,
           active: false,
           currentPos: new THREE.Vector3(),
           targetPos: new THREE.Vector3(),
@@ -322,17 +339,18 @@
       });
     }
 
-    registerPoints(HAND_POINTS, false);
-    registerPoints(FACE_POINTS, true);
+    registerPoints(HAND_POINTS);
+    registerPoints(FACE_POINTS);
+    registerPoints(BODY_POINTS);
 
-    // Dynamic 3D Red Ball Object
+    // Dynamic 3D Red Ball
     const ballGeometry = new THREE.SphereGeometry(0.1, 32, 32);
     const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3, metalness: 0.2 });
     const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
     ballMesh.scale.set(0, 0, 0);
     scene.add(ballMesh);
 
-    // Add Scene Light for the Ball
+    // Lights
     const light = new THREE.DirectionalLight(0xffffff, 1.2);
     light.position.set(1, 2, 3);
     scene.add(light);
@@ -341,20 +359,30 @@
     let ballScale = 0;
     const ballPos = new THREE.Vector3();
 
-    // Hand Skeleton Lines
-    const skeletonGeometry = new THREE.BufferGeometry();
-    const skeletonPositions = new Float32Array(HAND_CONNECTIONS.length * 2 * 3);
-    skeletonGeometry.setAttribute('position', new THREE.BufferAttribute(skeletonPositions, 3));
-    const skeletonLines = new THREE.LineSegments(skeletonGeometry, new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 }));
-    scene.add(skeletonLines);
+    // Hand Skeleton
+    const handSkelGeom = new THREE.BufferGeometry();
+    const handSkelPos = new Float32Array(HAND_CONNECTIONS.length * 2 * 3);
+    handSkelGeom.setAttribute('position', new THREE.BufferAttribute(handSkelPos, 3));
+    const handSkelLines = new THREE.LineSegments(handSkelGeom, new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 }));
+    scene.add(handSkelLines);
+
+    // Pose Skeleton
+    const poseSkelGeom = new THREE.BufferGeometry();
+    const poseSkelPos = new Float32Array(POSE_CONNECTIONS.length * 2 * 3);
+    poseSkelGeom.setAttribute('position', new THREE.BufferAttribute(poseSkelPos, 3));
+    const poseSkelLines = new THREE.LineSegments(poseSkelGeom, new THREE.LineBasicMaterial({ color: 0x007aff, transparent: true, opacity: 0.8 }));
+    scene.add(poseSkelLines);
 
     // World Position Caches
     const handWorldPositions = new Array(21).fill(null).map(() => new THREE.Vector3());
     const faceWorldPositions = new Array(478).fill(null).map(() => new THREE.Vector3());
+    const poseWorldPositions = new Array(33).fill(null).map(() => new THREE.Vector3());
+
     let handVisible = false;
     let faceVisible = false;
+    let poseVisible = false;
 
-    // --- Build UI Checkboxes ---
+    // --- Build UI Chips ---
     function buildUI() {
       const createChip = (p, containerEl) => {
         const chip = document.createElement('div');
@@ -372,28 +400,23 @@
         `;
         containerEl.appendChild(chip);
 
-        // Toggle marker box display
         chip.querySelector('.show-chk').addEventListener('change', (e) => {
           trackers[p.id].enabled = e.target.checked;
         });
 
-        // Set radio-like Ball target
         chip.querySelector('.ball-checkbox').addEventListener('change', (e) => {
-          if (e.target.checked) {
-            setBallTarget(p.id);
-          } else if (currentBallTargetId === p.id) {
-            e.target.checked = true; // Prevent deselecting active ball target without picking another
-          }
+          if (e.target.checked) setBallTarget(p.id);
+          else if (currentBallTargetId === p.id) e.target.checked = true;
         });
       };
 
-      HAND_POINTS.forEach(p => createChip(p, tabHand));
-      FACE_POINTS.forEach(p => createChip(p, tabFace));
+      HAND_POINTS.forEach(p => createChip(p, document.getElementById('tab-hand')));
+      FACE_POINTS.forEach(p => createChip(p, document.getElementById('tab-face')));
+      BODY_POINTS.forEach(p => createChip(p, document.getElementById('tab-body')));
     }
 
     function setBallTarget(targetId) {
       currentBallTargetId = targetId;
-      // Update radio-like behavior across UI checkboxes
       Object.keys(trackers).forEach(id => {
         const chk = document.getElementById(`ball-${id}`);
         if (chk) chk.checked = (id === targetId);
@@ -402,7 +425,6 @@
 
     buildUI();
 
-    // Map screen-cropped video normalized coords to camera view
     function mapToVisible(x, y) {
       const videoAspect = video.videoWidth / video.videoHeight;
       const screenAspect = window.innerWidth / window.innerHeight;
@@ -429,7 +451,7 @@
       return outVec;
     }
 
-    // --- MediaPipe Initialization ---
+    // --- MediaPipe Holistic Model Initialization ---
     async function startApp() {
       statusText.innerText = "Status: Requesting camera...";
 
@@ -444,35 +466,24 @@
           await new Promise(resolve => video.addEventListener('loadedmetadata', resolve, { once: true }));
         }
 
-        statusText.innerText = "Status: Loading Hand & Face ML...";
+        statusText.innerText = "Status: Loading Holistic ML Model...";
 
         const visionFiles = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
         );
 
-        // Load Hand Landmarker
-        handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
+        holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
           baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task",
             delegate: "GPU"
           },
           runningMode: "VIDEO",
-          numHands: 1,
-          minHandDetectionConfidence: 0.5
+          minFaceDetectionConfidence: 0.5,
+          minPoseDetectionConfidence: 0.5,
+          minHandLandmarksConfidence: 0.5
         });
 
-        // Load Face Landmarker
-        faceLandmarker = await FaceLandmarker.createFromOptions(visionFiles, {
-          baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-            delegate: "GPU"
-          },
-          runningMode: "VIDEO",
-          numFaces: 1,
-          minFaceDetectionConfidence: 0.5
-        });
-
-        statusText.innerText = "Status: Tracking Active";
+        statusText.innerText = "Status: Holistic Tracking Active";
         startBtn.parentElement.style.display = 'none';
         render();
 
@@ -484,61 +495,85 @@
 
     startBtn.addEventListener('click', startApp);
 
-    // --- Main Loop & Collision Mechanics ---
+    // --- Main Render & Tracking Loop ---
     function render() {
       requestAnimationFrame(render);
 
-      if (video.currentTime !== lastVideoTime && handLandmarker && faceLandmarker && video.videoWidth > 0) {
+      if (video.currentTime !== lastVideoTime && holisticLandmarker && video.videoWidth > 0) {
         lastVideoTime = video.currentTime;
         const now = performance.now();
 
-        // 1. Detect Hand
-        const handRes = handLandmarker.detectForVideo(video, now);
-        if (handRes.landmarks && handRes.landmarks.length > 0) {
+        const res = holisticLandmarker.detectForVideo(video, now);
+
+        // Parse Hand Landmarks (Right/Left hand fallback)
+        const handLandmarks = res.rightHandLandmarks?.length ? res.rightHandLandmarks : res.leftHandLandmarks;
+        if (handLandmarks && handLandmarks.length > 0) {
           handVisible = true;
-          const hand = handRes.landmarks[0];
-          for (let i = 0; i < hand.length; i++) landmarkToWorld(hand[i], handWorldPositions[i]);
+          for (let i = 0; i < handLandmarks.length; i++) landmarkToWorld(handLandmarks[i], handWorldPositions[i]);
         } else {
           handVisible = false;
         }
 
-        // 2. Detect Face
-        const faceRes = faceLandmarker.detectForVideo(video, now);
-        if (faceRes.faceLandmarks && faceRes.faceLandmarks.length > 0) {
+        // Parse Face Landmarks
+        if (res.faceLandmarks && res.faceLandmarks.length > 0) {
           faceVisible = true;
-          const face = faceRes.faceLandmarks[0];
+          const face = res.faceLandmarks[0];
           for (let i = 0; i < face.length; i++) landmarkToWorld(face[i], faceWorldPositions[i]);
         } else {
           faceVisible = false;
         }
 
-        // 3. Update Targets Target Positions
+        // Parse Body Pose Landmarks
+        if (res.poseLandmarks && res.poseLandmarks.length > 0) {
+          poseVisible = true;
+          const pose = res.poseLandmarks;
+          for (let i = 0; i < pose.length; i++) landmarkToWorld(pose[i], poseWorldPositions[i]);
+        } else {
+          poseVisible = false;
+        }
+
+        // Update active positions for target markers
         Object.values(trackers).forEach(t => {
-          const isVisible = t.isFace ? faceVisible : handVisible;
-          if (isVisible) {
+          let isVis = false;
+          let srcArr = null;
+
+          if (t.category === 'hand' && handVisible) { isVis = true; srcArr = handWorldPositions; }
+          else if (t.category === 'face' && faceVisible) { isVis = true; srcArr = faceWorldPositions; }
+          else if (t.category === 'pose' && poseVisible) { isVis = true; srcArr = poseWorldPositions; }
+
+          if (isVis && srcArr) {
             t.active = true;
             if (t.landmark === 'palm') {
               const avg = t.targetPos.set(0, 0, 0);
               PALM_LANDMARKS.forEach(idx => avg.add(handWorldPositions[idx]));
               avg.multiplyScalar(1 / PALM_LANDMARKS.length);
             } else {
-              const srcArray = t.isFace ? faceWorldPositions : handWorldPositions;
-              t.targetPos.copy(srcArray[t.landmark]);
+              t.targetPos.copy(srcArr[t.landmark]);
             }
           } else {
             t.active = false;
           }
         });
 
-        // 4. Proximity Transfer Check (Ball Handoff)
+        // Pinch Gesture Check: Pull ball back to Index finger tip if pinched
+        if (handVisible) {
+          const thumbTip = handWorldPositions[4];
+          const indexTip = handWorldPositions[8];
+          const pinchDist = thumbTip.distanceTo(indexTip);
+
+          if (pinchDist < PINCH_THRESHOLD && currentBallTargetId !== 'index') {
+            setBallTarget('index');
+          }
+        }
+
+        // Proximity Transfer Check across active targets
         const currentHolder = trackers[currentBallTargetId];
         if (currentHolder && currentHolder.active) {
-          // Compare current ball holder distance against all other active markers
           Object.values(trackers).forEach(other => {
             if (other.id !== currentBallTargetId && other.active) {
               const dist = currentHolder.targetPos.distanceTo(other.targetPos);
               if (dist < PROXIMITY_TRANSFER_THRESHOLD) {
-                setBallTarget(other.id); // Transfer ball!
+                setBallTarget(other.id);
               }
             }
           });
@@ -562,7 +597,7 @@
         }
       });
 
-      // --- Animate Ball to Active Target Position ---
+      // --- Animate Ball ---
       const activeBallHolder = trackers[currentBallTargetId];
       if (activeBallHolder && activeBallHolder.active) {
         ballPos.lerp(activeBallHolder.targetPos, 0.3);
@@ -573,10 +608,10 @@
       }
       ballMesh.scale.set(ballScale, ballScale, ballScale);
 
-      // --- Animate Hand Skeleton ---
-      const skelToggle = document.getElementById('toggle-skeleton');
-      if (skelToggle && skelToggle.checked && handVisible) {
-        const posAttr = skeletonGeometry.getAttribute('position');
+      // --- Draw Hand Skeleton ---
+      const handSkelChk = document.getElementById('toggle-hand-skel');
+      if (handSkelChk && handSkelChk.checked && handVisible) {
+        const posAttr = handSkelGeom.getAttribute('position');
         HAND_CONNECTIONS.forEach(([a, b], i) => {
           const pa = handWorldPositions[a];
           const pb = handWorldPositions[b];
@@ -584,9 +619,25 @@
           posAttr.setXYZ(i * 2 + 1, pb.x, pb.y, pb.z);
         });
         posAttr.needsUpdate = true;
-        skeletonLines.visible = true;
+        handSkelLines.visible = true;
       } else {
-        skeletonLines.visible = false;
+        handSkelLines.visible = false;
+      }
+
+      // --- Draw Body Pose Skeleton ---
+      const poseSkelChk = document.getElementById('toggle-pose-skel');
+      if (poseSkelChk && poseSkelChk.checked && poseVisible) {
+        const posAttr = poseSkelGeom.getAttribute('position');
+        POSE_CONNECTIONS.forEach(([a, b], i) => {
+          const pa = poseWorldPositions[a];
+          const pb = poseWorldPositions[b];
+          posAttr.setXYZ(i * 2, pa.x, pa.y, pa.z);
+          posAttr.setXYZ(i * 2 + 1, pb.x, pb.y, pb.z);
+        });
+        posAttr.needsUpdate = true;
+        poseSkelLines.visible = true;
+      } else {
+        poseSkelLines.visible = false;
       }
 
       renderer.render(scene, camera);
