@@ -18,7 +18,7 @@
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      transform: scaleX(-1); /* Mirror view for natural interaction */
+      transform: scaleX(-1);
     }
     #canvas-container {
       position: absolute;
@@ -33,7 +33,7 @@
       top: 16px;
       left: 16px;
       color: #fff;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.75);
       padding: 12px 16px;
       border-radius: 8px;
       z-index: 10;
@@ -45,14 +45,12 @@
       padding: 10px 16px;
       border-radius: 6px;
       font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
     }
   </style>
   
-  <!-- Three.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- MediaPipe Vision -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm/vision_bundle.js"></script>
 </head>
 <body>
 
@@ -61,34 +59,30 @@
 
   <div id="ui-overlay">
     <button id="start-btn">Start Camera & Tracking</button>
-    <p id="status">Status: Idle</p>
+    <p id="status">Status: Tap button to start</p>
   </div>
 
-  <script>
-    const { HandLandmarker, FilesetResolver } = vision;
+  <script type="module">
+    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
-    // DOM Elements
     const video = document.getElementById('webcam');
     const startBtn = document.getElementById('start-btn');
     const statusText = document.getElementById('status');
     const container = document.getElementById('canvas-container');
 
-    // Tracking State Variables
     let handLandmarker = null;
     let lastVideoTime = -1;
     let isTracked = false;
 
-    // Target positions & smoothing vectors
     const currentPos = new THREE.Vector3(0, 0, 0);
     const targetPos = new THREE.Vector3(0, 0, 0);
-    const LERP_FACTOR = 0.25; // Smoothing parameter (0.1 = heavy smooth, 0.5 = responsive)
+    const LERP_FACTOR = 0.25;
 
-    // Landing / Takeoff animation state
     let cubeScale = 0;
     const TARGET_SCALE = 0.15;
     const SCALE_SPEED = 0.08;
 
-    // --- 1. Three.js Scene Setup ---
+    // Three.js Setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 2;
@@ -98,64 +92,51 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Cube Geometry & Material
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshNormalMaterial({ wireframe: false });
+    const material = new THREE.MeshNormalMaterial();
     const cube = new THREE.Mesh(geometry, material);
-    cube.scale.set(0, 0, 0); // Start hidden
+    cube.scale.set(0, 0, 0);
     scene.add(cube);
 
-    // --- 2. Initialize MediaPipe Hand Landmarker ---
-    async function initMediaPipe() {
-      statusText.innerText = "Status: Loading ML Models...";
-      const visionFiles = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-      );
-
-      handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
-        baseOptions: {
-          modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-          delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        numHands: 1,
-        minHandDetectionConfidence: 0.6,
-        minHandPresenceConfidence: 0.6,
-        minTrackingConfidence: 0.6
-      });
-
-      statusText.innerText = "Status: Ready";
-    }
-
-    // --- 3. Camera Setup for Mobile Safari / Web ---
-    async function startCamera() {
-      if (!handLandmarker) await initMediaPipe();
-
-      const constraints = {
-        video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      };
-
+    async function startApp() {
+      statusText.innerText = "Status: Requesting camera...";
+      
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = stream;
-        video.addEventListener('loadeddata', () => {
-          statusText.innerText = "Status: Tracking Active";
-          startBtn.style.display = 'none';
-          render();
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
         });
+        video.srcObject = stream;
+        await video.play();
+
+        statusText.innerText = "Status: Loading MediaPipe...";
+
+        const visionFiles = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
+        );
+
+        handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 1,
+          minHandDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        statusText.innerText = "Status: Tracking Active";
+        startBtn.style.display = 'none';
+        render();
+
       } catch (err) {
-        statusText.innerText = "Error: Camera access denied";
+        statusText.innerText = "Error: " + err.message;
         console.error(err);
       }
     }
 
-    startBtn.addEventListener('click', startCamera);
+    startBtn.addEventListener('click', startApp);
 
-    // --- 4. Main Render & Tracking Loop ---
     function render() {
       requestAnimationFrame(render);
 
@@ -165,42 +146,26 @@
 
         if (results.landmarks && results.landmarks.length > 0) {
           isTracked = true;
-
-          // Index Finger Tip is Landmark 8
           const indexTip = results.landmarks[0][8];
 
-          // Normalize Viewport to Three.js Screen Space Coordinates (-1 to +1)
-          // Video is mirrored on CSS, so flip X coordinate for correct mapping
           const normalizedX = -(indexTip.x * 2 - 1);
           const normalizedY = -(indexTip.y * 2 - 1);
 
-          // Unproject to 3D world space relative to camera depth
           const vector = new THREE.Vector3(normalizedX, normalizedY, 0.5);
           vector.unproject(camera);
           const dir = vector.sub(camera.position).normalize();
-          const distance = 1.8; // Depth placement distance
-          
-          targetPos.copy(camera.position).add(dir.multiplyScalar(distance));
+          targetPos.copy(camera.position).add(dir.multiplyScalar(1.8));
         } else {
-          isTracked = false; // Trigger takeoff sequence
+          isTracked = false;
         }
       }
 
-      // --- 5. Smoothing & Landing/Takeoff Behavior ---
       if (isTracked) {
-        // Exponential Position Smoothing (Exponential Moving Average / Lerp)
         currentPos.lerp(targetPos, LERP_FACTOR);
         cube.position.copy(currentPos);
-
-        // Landing Transition: Scale Up
-        if (cubeScale < TARGET_SCALE) {
-          cubeScale = Math.min(TARGET_SCALE, cubeScale + SCALE_SPEED);
-        }
+        if (cubeScale < TARGET_SCALE) cubeScale = Math.min(TARGET_SCALE, cubeScale + SCALE_SPEED);
       } else {
-        // Takeoff Transition: Scale Down to 0
-        if (cubeScale > 0) {
-          cubeScale = Math.max(0, cubeScale - SCALE_SPEED);
-        }
+        if (cubeScale > 0) cubeScale = Math.max(0, cubeScale - SCALE_SPEED);
       }
 
       cube.scale.set(cubeScale, cubeScale, cubeScale);
@@ -210,7 +175,6 @@
       renderer.render(scene, camera);
     }
 
-    // Handle Window Resize
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
