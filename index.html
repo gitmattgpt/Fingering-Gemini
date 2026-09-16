@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Cube Hand Tracking Test</title>
+  <title>3D Hand & Face Ball Tracking Test</title>
   <style>
     body {
       margin: 0;
@@ -28,86 +28,143 @@
       height: 100vh;
       pointer-events: none;
     }
-    #ui-overlay {
+    #status-overlay {
       position: absolute;
       top: 16px;
       left: 16px;
       color: #fff;
       background: rgba(0, 0, 0, 0.75);
-      padding: 12px 16px;
+      padding: 10px 14px;
       border-radius: 8px;
       z-index: 10;
-      max-width: 260px;
-    }
-    #ui-overlay p {
-      margin: 8px 0 0 0;
       font-size: 13px;
-      line-height: 1.4;
+      max-width: 280px;
     }
-    button {
+    #status-overlay button {
       background: #007aff;
       color: #fff;
       border: none;
-      padding: 10px 16px;
+      padding: 8px 14px;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
+      width: 100%;
     }
 
-    /* Bottom control bar */
-    #control-bar {
+    /* Floating toggle button at bottom center */
+    #menu-toggle-btn {
+      position: absolute;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: rgba(0, 122, 255, 0.9);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Bottom drawer menu */
+    #control-drawer {
       position: absolute;
       bottom: 0;
       left: 0;
       width: 100%;
-      z-index: 10;
+      z-index: 15;
+      background: rgba(15, 15, 20, 0.92);
+      backdrop-filter: blur(12px);
+      box-sizing: border-box;
+      padding: 12px 12px calc(50px + env(safe-area-inset-bottom)) 12px;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      transform: translateY(100%);
+      transition: transform 0.28s ease-in-out;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 45vh;
+    }
+    #control-drawer.open {
+      transform: translateY(0);
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      padding-bottom: 8px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #aaa;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #007aff;
+      color: #fff;
+      border-color: #007aff;
+    }
+
+    /* Tab Contents */
+    .tab-content {
+      display: none;
+      overflow-y: auto;
+      max-height: 30vh;
+    }
+    .tab-content.active {
       display: flex;
       flex-wrap: wrap;
-      align-items: center;
+      gap: 8px;
       justify-content: center;
-      gap: 10px;
-      padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(6px);
-      box-sizing: border-box;
     }
-    .control-chip {
+
+    /* Item chips with dual checkboxes */
+    .chip-item {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       color: #fff;
       font-size: 12px;
-      font-weight: 500;
       background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.15);
       padding: 6px 10px;
-      border-radius: 999px;
-      user-select: none;
-      white-space: nowrap;
-    }
-    .control-chip input[type="checkbox"] {
-      width: 15px;
-      height: 15px;
-      accent-color: #007aff;
-      cursor: pointer;
-      margin: 0;
-    }
-    .control-chip.skeleton-chip {
-      background: rgba(255, 255, 255, 0.14);
-      border-color: rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
     }
     .chip-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      flex-shrink: 0;
     }
-    #control-divider {
-      width: 1px;
-      align-self: stretch;
-      background: rgba(255, 255, 255, 0.2);
-      margin: 2px 2px;
+    .sub-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #ddd;
+    }
+    input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      accent-color: #007aff;
+      cursor: pointer;
+      margin: 0;
+    }
+    .ball-checkbox {
+      accent-color: #ff3b30 !important;
     }
   </style>
 
@@ -118,69 +175,117 @@
   <video id="webcam" autoplay playsinline muted></video>
   <div id="canvas-container"></div>
 
-  <div id="ui-overlay">
-    <button id="start-btn">Start Camera &amp; Tracking</button>
-    <p id="status">Status: Tap button to start</p>
+  <div id="status-overlay">
+    <button id="start-btn">Start Camera & Tracking</button>
+    <p id="status" style="margin:8px 0 0 0;">Status: Tap button to start</p>
   </div>
 
-  <div id="control-bar">
-    <label class="control-chip skeleton-chip">
-      <input type="checkbox" id="toggle-skeleton" checked />
-      Skeleton
-    </label>
-    <div id="control-divider"></div>
-    <!-- Point checkboxes are injected by script, one per POINTS entry -->
+  <button id="menu-toggle-btn">Show Menu</button>
+
+  <div id="control-drawer">
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-btn-hand">Hand Targets</button>
+      <button class="tab-btn" id="tab-btn-face">Face Targets</button>
+    </div>
+
+    <!-- Hand Tab Content -->
+    <div class="tab-content active" id="tab-hand">
+      <div class="chip-item">
+        <label class="sub-group">
+          <input type="checkbox" id="toggle-skeleton" checked />
+          Skeleton Overlay
+        </label>
+      </div>
+      <!-- Hand point chips generated dynamically -->
+    </div>
+
+    <!-- Face Tab Content -->
+    <div class="tab-content" id="tab-face">
+      <!-- Face point chips generated dynamically -->
+    </div>
   </div>
 
   <script type="module">
-    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+    import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
+    // --- DOM Elements ---
     const video = document.getElementById('webcam');
     const startBtn = document.getElementById('start-btn');
     const statusText = document.getElementById('status');
     const container = document.getElementById('canvas-container');
-    const controlBar = document.getElementById('control-bar');
-    const skeletonToggle = document.getElementById('toggle-skeleton');
+    const drawer = document.getElementById('control-drawer');
+    const menuToggleBtn = document.getElementById('menu-toggle-btn');
 
+    // Drawer Show/Hide behavior
+    menuToggleBtn.addEventListener('click', () => {
+      const isOpen = drawer.classList.toggle('open');
+      menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
+    });
+
+    // Tab Navigation
+    const tabHandBtn = document.getElementById('tab-btn-hand');
+    const tabFaceBtn = document.getElementById('tab-btn-face');
+    const tabHand = document.getElementById('tab-hand');
+    const tabFace = document.getElementById('tab-face');
+
+    tabHandBtn.addEventListener('click', () => {
+      tabHandBtn.classList.add('active');
+      tabFaceBtn.classList.remove('active');
+      tabHand.classList.add('active');
+      tabFace.classList.remove('active');
+    });
+
+    tabFaceBtn.addEventListener('click', () => {
+      tabFaceBtn.classList.add('active');
+      tabHandBtn.classList.remove('active');
+      tabFace.classList.add('active');
+      tabHand.classList.remove('active');
+    });
+
+    // --- Tracking Targets Config ---
+    const HAND_POINTS = [
+      { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  defaultShow: false },
+      { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  defaultShow: false },
+      { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  defaultShow: true  },
+      { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, defaultShow: false },
+      { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, defaultShow: false },
+      { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, defaultShow: false },
+      { id: 'palm',   label: 'Palm',       color: '#ff9800', landmark: 'palm', defaultShow: false }
+    ];
+
+    const FACE_POINTS = [
+      { id: 'nose',     label: 'Nose Tip',  color: '#ff4081', landmark: 1,   defaultShow: true  },
+      { id: 'forehead', label: 'Forehead',  color: '#ab47bc', landmark: 10,  defaultShow: false },
+      { id: 'chin',     label: 'Chin',      color: '#26a69a', landmark: 152, defaultShow: false },
+      { id: 'eyeL',     label: 'Left Eye',  color: '#42a5f5', landmark: 33,  defaultShow: false },
+      { id: 'eyeR',     label: 'Right Eye', color: '#5c6bc0', landmark: 263, defaultShow: false },
+      { id: 'mouth',    label: 'Mouth',     color: '#ff7043', landmark: 13,  defaultShow: false }
+    ];
+
+    const PALM_LANDMARKS = [0, 5, 9, 13, 17];
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4], [0,5],[5,6],[6,7],[7,8],
+      [5,9],[9,10],[10,11],[11,12], [9,13],[13,14],[14,15],[15,16],
+      [13,17],[17,18],[18,19],[19,20], [0,17]
+    ];
+
+    // Global Ball State: Default ball target is 'index'
+    let currentBallTargetId = 'index';
+    const PROXIMITY_TRANSFER_THRESHOLD = 0.16; // 3D distance units for transfer
+
+    // --- State & Scene Setup ---
     let handLandmarker = null;
+    let faceLandmarker = null;
     let lastVideoTime = -1;
-    let isTracked = false;
 
     const LERP_FACTOR = 0.25;
-    const TARGET_SCALE = 0.15;
+    const TARGET_SCALE = 0.12;
     const SCALE_SPEED = 0.08;
     const UNPROJECT_DISTANCE = 1.8;
 
-    // Reused scratch objects (avoid per-frame allocation)
     const _ndc = new THREE.Vector3();
     const _dir = new THREE.Vector3();
 
-    // ---- Trackable points -------------------------------------------------
-    // MediaPipe Hand landmark indices:
-    // 0 wrist, 4 thumb tip, 8 index tip, 12 middle tip, 16 ring tip, 20 pinky tip
-    // "palm" is computed as the average of wrist + four MCP joints (0,5,9,13,17)
-    const POINTS = [
-      { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  default: false },
-      { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  default: false },
-      { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  default: true  },
-      { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, default: false },
-      { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, default: false },
-      { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, default: false },
-      { id: 'palm',   label: 'Palm',       color: '#ff9800', landmark: 'palm', default: false }
-    ];
-    const PALM_LANDMARKS = [0, 5, 9, 13, 17];
-
-    // Standard MediaPipe hand connections, used to draw the skeleton
-    const HAND_CONNECTIONS = [
-      [0,1],[1,2],[2,3],[3,4],           // thumb
-      [0,5],[5,6],[6,7],[7,8],           // index
-      [5,9],[9,10],[10,11],[11,12],      // middle
-      [9,13],[13,14],[14,15],[15,16],    // ring
-      [13,17],[17,18],[18,19],[19,20],   // pinky
-      [0,17]                              // palm base
-    ];
-
-    // ---- Three.js setup -----------------------------------------------------
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.z = 2;
@@ -190,79 +295,122 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // One tracked "cube" object per point, each with its own smoothing state
+    // Trackers dictionary for all landmarks (Hand + Face)
     const trackers = {};
-    POINTS.forEach(p => {
-      const geometry = new THREE.BoxGeometry(1, 1, 1);
-      const material = new THREE.MeshBasicMaterial({ color: p.color, wireframe: false });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.scale.set(0, 0, 0);
-      scene.add(mesh);
 
-      trackers[p.id] = {
-        mesh,
-        enabled: p.default,
-        active: false,          // true once we've seen this point at least once this session
-        currentPos: new THREE.Vector3(),
-        targetPos: new THREE.Vector3(),
-        scale: 0
-      };
-    });
+    function registerPoints(pointsList, isFace) {
+      pointsList.forEach(p => {
+        // Create 3D Cube Marker Mesh
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshBasicMaterial({ color: p.color });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.scale.set(0, 0, 0);
+        scene.add(mesh);
 
-    // Skeleton drawn as a single LineSegments object, positions updated per frame
-    const MAX_SKELETON_POINTS = 21;
+        trackers[p.id] = {
+          id: p.id,
+          label: p.label,
+          mesh,
+          enabled: p.defaultShow,
+          landmark: p.landmark,
+          isFace,
+          active: false,
+          currentPos: new THREE.Vector3(),
+          targetPos: new THREE.Vector3(),
+          scale: 0
+        };
+      });
+    }
+
+    registerPoints(HAND_POINTS, false);
+    registerPoints(FACE_POINTS, true);
+
+    // Dynamic 3D Red Ball Object
+    const ballGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+    const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3, metalness: 0.2 });
+    const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
+    ballMesh.scale.set(0, 0, 0);
+    scene.add(ballMesh);
+
+    // Add Scene Light for the Ball
+    const light = new THREE.DirectionalLight(0xffffff, 1.2);
+    light.position.set(1, 2, 3);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+    let ballScale = 0;
+    const ballPos = new THREE.Vector3();
+
+    // Hand Skeleton Lines
     const skeletonGeometry = new THREE.BufferGeometry();
     const skeletonPositions = new Float32Array(HAND_CONNECTIONS.length * 2 * 3);
     skeletonGeometry.setAttribute('position', new THREE.BufferAttribute(skeletonPositions, 3));
-    const skeletonMaterial = new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 });
-    const skeletonLines = new THREE.LineSegments(skeletonGeometry, skeletonMaterial);
-    skeletonLines.visible = skeletonToggle.checked;
+    const skeletonLines = new THREE.LineSegments(skeletonGeometry, new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 }));
     scene.add(skeletonLines);
 
-    // World-space cache for every raw landmark this frame (used by skeleton + palm calc)
-    const worldPositions = new Array(21).fill(null).map(() => new THREE.Vector3());
-    let landmarksVisibleThisFrame = false;
+    // World Position Caches
+    const handWorldPositions = new Array(21).fill(null).map(() => new THREE.Vector3());
+    const faceWorldPositions = new Array(478).fill(null).map(() => new THREE.Vector3());
+    let handVisible = false;
+    let faceVisible = false;
 
-    // ---- Build bottom control bar checkboxes --------------------------------
-    POINTS.forEach(p => {
-      const label = document.createElement('label');
-      label.className = 'control-chip';
-      label.innerHTML = `
-        <span class="chip-dot" style="background:${p.color}"></span>
-        <input type="checkbox" id="toggle-${p.id}" ${p.default ? 'checked' : ''} />
-        ${p.label}
-      `;
-      controlBar.appendChild(label);
+    // --- Build UI Checkboxes ---
+    function buildUI() {
+      const createChip = (p, containerEl) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip-item';
+        chip.innerHTML = `
+          <span class="chip-dot" style="background:${p.color}"></span>
+          <label class="sub-group">
+            <input type="checkbox" class="show-chk" id="show-${p.id}" ${p.defaultShow ? 'checked' : ''} />
+            ${p.label}
+          </label>
+          <label class="sub-group" style="margin-left:6px; border-left:1px solid #444; padding-left:6px;">
+            <input type="checkbox" class="ball-checkbox" id="ball-${p.id}" ${p.id === currentBallTargetId ? 'checked' : ''} />
+            Ball
+          </label>
+        `;
+        containerEl.appendChild(chip);
 
-      label.querySelector('input').addEventListener('change', (e) => {
-        trackers[p.id].enabled = e.target.checked;
+        // Toggle marker box display
+        chip.querySelector('.show-chk').addEventListener('change', (e) => {
+          trackers[p.id].enabled = e.target.checked;
+        });
+
+        // Set radio-like Ball target
+        chip.querySelector('.ball-checkbox').addEventListener('change', (e) => {
+          if (e.target.checked) {
+            setBallTarget(p.id);
+          } else if (currentBallTargetId === p.id) {
+            e.target.checked = true; // Prevent deselecting active ball target without picking another
+          }
+        });
+      };
+
+      HAND_POINTS.forEach(p => createChip(p, tabHand));
+      FACE_POINTS.forEach(p => createChip(p, tabFace));
+    }
+
+    function setBallTarget(targetId) {
+      currentBallTargetId = targetId;
+      // Update radio-like behavior across UI checkboxes
+      Object.keys(trackers).forEach(id => {
+        const chk = document.getElementById(`ball-${id}`);
+        if (chk) chk.checked = (id === targetId);
       });
-    });
+    }
 
-    skeletonToggle.addEventListener('change', (e) => {
-      skeletonLines.visible = e.target.checked;
-    });
+    buildUI();
 
-    // ---- Camera / aspect-ratio correction ------------------------------------
-    // object-fit: cover crops the video to fill the screen, but MediaPipe's
-    // normalized landmark coordinates (0-1) are relative to the FULL, uncropped
-    // camera frame. Without remapping, tracked points drift from their visible
-    // on-screen position (worse near the edges). This maps a normalized
-    // landmark coordinate into the visible "cover" crop window.
+    // Map screen-cropped video normalized coords to camera view
     function mapToVisible(x, y) {
       const videoAspect = video.videoWidth / video.videoHeight;
       const screenAspect = window.innerWidth / window.innerHeight;
       let visW = 1, visH = 1;
-
-      if (screenAspect > videoAspect) {
-        visH = videoAspect / screenAspect; // top/bottom cropped
-      } else {
-        visW = screenAspect / videoAspect; // left/right cropped
-      }
-
+      if (screenAspect > videoAspect) visH = videoAspect / screenAspect;
+      else visW = screenAspect / videoAspect;
       const startX = (1 - visW) / 2;
       const startY = (1 - visH) / 2;
-
       return {
         x: THREE.MathUtils.clamp((x - startX) / visW, 0, 1),
         y: THREE.MathUtils.clamp((y - startY) / visH, 0, 1)
@@ -281,20 +429,7 @@
       return outVec;
     }
 
-    // ---- MediaPipe setup, with GPU -> CPU fallback ---------------------------
-    async function createHandLandmarker(visionFiles, delegate) {
-      return HandLandmarker.createFromOptions(visionFiles, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-          delegate
-        },
-        runningMode: "VIDEO",
-        numHands: 1,
-        minHandDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-    }
-
+    // --- MediaPipe Initialization ---
     async function startApp() {
       statusText.innerText = "Status: Requesting camera...";
 
@@ -305,30 +440,40 @@
         video.srcObject = stream;
         await video.play();
 
-        // Make sure we actually have frame dimensions before we start detecting;
-        // play() can resolve slightly before metadata (videoWidth/videoHeight) is ready.
         if (!video.videoWidth || !video.videoHeight) {
-          await new Promise(resolve => {
-            video.addEventListener('loadedmetadata', resolve, { once: true });
-          });
+          await new Promise(resolve => video.addEventListener('loadedmetadata', resolve, { once: true }));
         }
 
-        statusText.innerText = "Status: Loading MediaPipe...";
+        statusText.innerText = "Status: Loading Hand & Face ML...";
 
         const visionFiles = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
         );
 
-        try {
-          handLandmarker = await createHandLandmarker(visionFiles, "GPU");
-        } catch (gpuErr) {
-          console.warn("GPU delegate failed, falling back to CPU:", gpuErr);
-          statusText.innerText = "Status: GPU unavailable, using CPU...";
-          handLandmarker = await createHandLandmarker(visionFiles, "CPU");
-        }
+        // Load Hand Landmarker
+        handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 1,
+          minHandDetectionConfidence: 0.5
+        });
+
+        // Load Face Landmarker
+        faceLandmarker = await FaceLandmarker.createFromOptions(visionFiles, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numFaces: 1,
+          minFaceDetectionConfidence: 0.5
+        });
 
         statusText.innerText = "Status: Tracking Active";
-        startBtn.style.display = 'none';
+        startBtn.parentElement.style.display = 'none';
         render();
 
       } catch (err) {
@@ -339,47 +484,70 @@
 
     startBtn.addEventListener('click', startApp);
 
-    // ---- Main render loop -----------------------------------------------------
+    // --- Main Loop & Collision Mechanics ---
     function render() {
       requestAnimationFrame(render);
 
-      if (video.currentTime !== lastVideoTime && handLandmarker && video.videoWidth > 0) {
+      if (video.currentTime !== lastVideoTime && handLandmarker && faceLandmarker && video.videoWidth > 0) {
         lastVideoTime = video.currentTime;
-        const results = handLandmarker.detectForVideo(video, performance.now());
+        const now = performance.now();
 
-        if (results.landmarks && results.landmarks.length > 0) {
-          isTracked = true;
-          landmarksVisibleThisFrame = true;
-          const hand = results.landmarks[0];
+        // 1. Detect Hand
+        const handRes = handLandmarker.detectForVideo(video, now);
+        if (handRes.landmarks && handRes.landmarks.length > 0) {
+          handVisible = true;
+          const hand = handRes.landmarks[0];
+          for (let i = 0; i < hand.length; i++) landmarkToWorld(hand[i], handWorldPositions[i]);
+        } else {
+          handVisible = false;
+        }
 
-          // Cache every raw landmark's world position once per frame
-          for (let i = 0; i < hand.length; i++) {
-            landmarkToWorld(hand[i], worldPositions[i]);
-          }
+        // 2. Detect Face
+        const faceRes = faceLandmarker.detectForVideo(video, now);
+        if (faceRes.faceLandmarks && faceRes.faceLandmarks.length > 0) {
+          faceVisible = true;
+          const face = faceRes.faceLandmarks[0];
+          for (let i = 0; i < face.length; i++) landmarkToWorld(face[i], faceWorldPositions[i]);
+        } else {
+          faceVisible = false;
+        }
 
-          // Update each enabled tracker's target position
-          POINTS.forEach(p => {
-            const t = trackers[p.id];
-            if (p.landmark === 'palm') {
+        // 3. Update Targets Target Positions
+        Object.values(trackers).forEach(t => {
+          const isVisible = t.isFace ? faceVisible : handVisible;
+          if (isVisible) {
+            t.active = true;
+            if (t.landmark === 'palm') {
               const avg = t.targetPos.set(0, 0, 0);
-              PALM_LANDMARKS.forEach(idx => avg.add(worldPositions[idx]));
+              PALM_LANDMARKS.forEach(idx => avg.add(handWorldPositions[idx]));
               avg.multiplyScalar(1 / PALM_LANDMARKS.length);
             } else {
-              t.targetPos.copy(worldPositions[p.landmark]);
+              const srcArray = t.isFace ? faceWorldPositions : handWorldPositions;
+              t.targetPos.copy(srcArray[t.landmark]);
             }
-            t.active = true;
+          } else {
+            t.active = false;
+          }
+        });
+
+        // 4. Proximity Transfer Check (Ball Handoff)
+        const currentHolder = trackers[currentBallTargetId];
+        if (currentHolder && currentHolder.active) {
+          // Compare current ball holder distance against all other active markers
+          Object.values(trackers).forEach(other => {
+            if (other.id !== currentBallTargetId && other.active) {
+              const dist = currentHolder.targetPos.distanceTo(other.targetPos);
+              if (dist < PROXIMITY_TRANSFER_THRESHOLD) {
+                setBallTarget(other.id); // Transfer ball!
+              }
+            }
           });
-        } else {
-          isTracked = false;
-          landmarksVisibleThisFrame = false;
         }
       }
 
-      // Animate each point's cube (position lerp + scale in/out)
-      POINTS.forEach(p => {
-        const t = trackers[p.id];
-        const shouldShow = t.enabled && isTracked && t.active;
-
+      // --- Animate 3D Cube Markers ---
+      Object.values(trackers).forEach(t => {
+        const shouldShow = t.enabled && t.active;
         if (shouldShow) {
           t.currentPos.lerp(t.targetPos, LERP_FACTOR);
           t.mesh.position.copy(t.currentPos);
@@ -387,7 +555,6 @@
         } else {
           if (t.scale > 0) t.scale = Math.max(0, t.scale - SCALE_SPEED);
         }
-
         t.mesh.scale.set(t.scale, t.scale, t.scale);
         if (t.scale > 0) {
           t.mesh.rotation.x += 0.02;
@@ -395,26 +562,31 @@
         }
       });
 
-      // Update skeleton line positions
-      if (skeletonLines.visible && landmarksVisibleThisFrame) {
+      // --- Animate Ball to Active Target Position ---
+      const activeBallHolder = trackers[currentBallTargetId];
+      if (activeBallHolder && activeBallHolder.active) {
+        ballPos.lerp(activeBallHolder.targetPos, 0.3);
+        ballMesh.position.copy(ballPos);
+        if (ballScale < 1) ballScale = Math.min(1, ballScale + 0.1);
+      } else {
+        if (ballScale > 0) ballScale = Math.max(0, ballScale - 0.1);
+      }
+      ballMesh.scale.set(ballScale, ballScale, ballScale);
+
+      // --- Animate Hand Skeleton ---
+      const skelToggle = document.getElementById('toggle-skeleton');
+      if (skelToggle && skelToggle.checked && handVisible) {
         const posAttr = skeletonGeometry.getAttribute('position');
         HAND_CONNECTIONS.forEach(([a, b], i) => {
-          const pa = worldPositions[a];
-          const pb = worldPositions[b];
+          const pa = handWorldPositions[a];
+          const pb = handWorldPositions[b];
           posAttr.setXYZ(i * 2, pa.x, pa.y, pa.z);
           posAttr.setXYZ(i * 2 + 1, pb.x, pb.y, pb.z);
         });
         posAttr.needsUpdate = true;
         skeletonLines.visible = true;
-      } else if (skeletonToggle.checked && !landmarksVisibleThisFrame) {
-        // Hand out of frame: keep the toggle "on" but hide the (stale) lines
+      } else {
         skeletonLines.visible = false;
-      } else if (!skeletonToggle.checked) {
-        skeletonLines.visible = false;
-      }
-      // Re-show once hand reappears, if the user still wants it on
-      if (skeletonToggle.checked && landmarksVisibleThisFrame) {
-        skeletonLines.visible = true;
       }
 
       renderer.render(scene, camera);
