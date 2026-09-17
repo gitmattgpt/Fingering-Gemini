@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Dual-Engine Tracking (Offline-Ready)</title>
+  <title>3D Dual-Engine Tracking - Pinch & Butterfly AR</title>
   <style>
     body {
       margin: 0;
@@ -78,6 +78,17 @@
       font-weight: bold;
       display: none;
     }
+    #pinch-badge {
+      margin-top: 6px;
+      padding: 4px 8px;
+      background: #ff9500;
+      color: #000;
+      border-radius: 6px;
+      font-weight: bold;
+      display: inline-block;
+      font-size: 10px;
+      visibility: hidden;
+    }
 
     /* Modal */
     #loading-modal {
@@ -144,7 +155,7 @@
     .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
     .sub-group { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ddd; }
     input[type="checkbox"] { width: 14px; height: 14px; accent-color: #007aff; cursor: pointer; margin: 0; }
-    .ball-checkbox { accent-color: #ff3b30 !important; }
+    .ball-checkbox { accent-color: #ff9500 !important; }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -167,6 +178,7 @@
     <button id="start-btn">Start Tracking Engine</button>
     <div id="status-text" style="margin-top:8px; font-weight: 500;">Status: Ready</div>
     <div id="offline-tag">✓ OFFLINE READY (Cached)</div>
+    <div id="pinch-badge">PINCH ACTIVE</div>
     <div id="detection-indicators" style="margin-top:8px; display:none;">
       Active Tracking:
       <div style="margin-top: 4px;">
@@ -211,7 +223,7 @@
     FilesetResolver
   } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
-  // Service Worker Registration for Offline Play
+  // Register SW for Offline Play
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js')
@@ -236,6 +248,7 @@
   const badgeHand = document.getElementById('badge-hand');
   const badgeFace = document.getElementById('badge-face');
   const badgePose = document.getElementById('badge-pose');
+  const pinchBadge = document.getElementById('pinch-badge');
   const detectIndicators = document.getElementById('detection-indicators');
 
   menuToggleBtn.addEventListener('click', () => {
@@ -297,7 +310,8 @@
   ];
 
   let currentBallTargetId = 'index';
-  const PROXIMITY_TRANSFER_THRESHOLD = 0.18;
+  const PROXIMITY_TRANSFER_THRESHOLD = 0.20;
+  const PINCH_THRESHOLD = 0.055; // Distance threshold between Thumb and Index tip
 
   let holisticLandmarker = null;
   let handLandmarker = null;
@@ -335,14 +349,86 @@
 
   registerPoints(HAND_POINTS); registerPoints(FACE_POINTS); registerPoints(BODY_POINTS);
 
-  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 32, 32), new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3, metalness: 0.2 }));
+  // --- PROCEDURAL BUTTERFLY MESH CREATION ---
+  function createProceduralButterfly() {
+    const butterflyGroup = new THREE.Group();
+
+    // 1. Generate Procedural Wing Texture Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    // Fill background with transparent alpha
+    ctx.clearRect(0, 0, 256, 256);
+
+    // Draw Butterfly Wing Outline and Color Gradient
+    const grad = ctx.createRadialGradient(128, 128, 10, 128, 128, 120);
+    grad.addColorStop(0, '#ff9500');
+    grad.addColorStop(0.6, '#ff2d55');
+    grad.addColorStop(1, '#5856d6');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(10, 128);
+    ctx.bezierCurveTo(20, 20, 220, 10, 240, 100);
+    ctx.bezierCurveTo(250, 180, 180, 250, 100, 240);
+    ctx.bezierCurveTo(20, 220, 0, 180, 10, 128);
+    ctx.closePath();
+    ctx.fill();
+
+    // Wing Vein Details
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(10, 128); ctx.lineTo(200, 90);
+    ctx.moveTo(10, 128); ctx.lineTo(180, 160);
+    ctx.moveTo(10, 128); ctx.lineTo(120, 210);
+    ctx.stroke();
+
+    const wingTexture = new THREE.CanvasTexture(canvas);
+
+    const wingMat = new THREE.MeshStandardMaterial({
+      map: wingTexture,
+      transparent: true,
+      side: THREE.DoubleSide,
+      roughness: 0.3,
+      metalness: 0.1
+    });
+
+    const wingGeo = new THREE.PlaneGeometry(0.22, 0.22);
+    wingGeo.translate(0.11, 0, 0); // Shift origin to hinge edge
+
+    // Left Wing
+    const leftWing = new THREE.Mesh(wingGeo, wingMat);
+    
+    // Right Wing (Mirrored)
+    const rightWingGeo = new THREE.PlaneGeometry(0.22, 0.22);
+    rightWingGeo.translate(-0.11, 0, 0);
+    const rightWing = new THREE.Mesh(rightWingGeo, wingMat);
+
+    // Body Center
+    const bodyGeo = new THREE.CylinderGeometry(0.012, 0.008, 0.18, 12);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+
+    butterflyGroup.add(leftWing);
+    butterflyGroup.add(rightWing);
+    butterflyGroup.add(bodyMesh);
+
+    return { group: butterflyGroup, leftWing, rightWing };
+  }
+
+  const butterfly = createProceduralButterfly();
+  const ballMesh = butterfly.group;
   ballMesh.scale.set(0, 0, 0);
   scene.add(ballMesh);
 
-  const light = new THREE.DirectionalLight(0xffffff, 1.2); light.position.set(1, 2, 3); scene.add(light);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const light = new THREE.DirectionalLight(0xffffff, 1.4); light.position.set(1, 2, 3); scene.add(light);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
   let ballScale = 0; const ballPos = new THREE.Vector3();
+  let isPinched = false;
+  let pinchPosition = new THREE.Vector3();
 
   const handSkelGeom = new THREE.BufferGeometry(); handSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(HAND_CONNECTIONS.length * 6), 3));
   const handSkelLines = new THREE.LineSegments(handSkelGeom, new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 }));
@@ -421,6 +507,20 @@
     return outVec;
   }
 
+  // --- PINCH GESTURE DETECTOR ---
+  function detectPinchGesture(landmarks) {
+    if (!landmarks || landmarks.length < 9) return false;
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+
+    const dx = thumbTip.x - indexTip.x;
+    const dy = thumbTip.y - indexTip.y;
+    const dz = (thumbTip.z || 0) - (indexTip.z || 0);
+
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    return dist < PINCH_THRESHOLD;
+  }
+
   async function startApp() {
     activeEngine = engineSelect.value;
     startBtn.style.display = 'none';
@@ -484,7 +584,12 @@
       handVisible = true;
       const handPoints = handRes.landmarks[0];
       for (let i = 0; i < 21; i++) landmarkToWorld(handPoints[i], handWorldPositions[i]);
-    } else handVisible = false;
+
+      isPinched = detectPinchGesture(handPoints);
+      if (isPinched) {
+        pinchPosition.copy(handWorldPositions[4]).add(handWorldPositions[8]).multiplyScalar(0.5);
+      }
+    } else { handVisible = false; isPinched = false; }
 
     const faceRes = faceLandmarker.detectForVideo(video, now);
     if (faceRes.faceLandmarks && faceRes.faceLandmarks.length > 0) {
@@ -506,7 +611,12 @@
     if (handLandmarks && handLandmarks.length === 21) {
       handVisible = true;
       for (let i = 0; i < 21; i++) landmarkToWorld(handLandmarks[i], handWorldPositions[i]);
-    } else handVisible = false;
+
+      isPinched = detectPinchGesture(handLandmarks);
+      if (isPinched) {
+        pinchPosition.copy(handWorldPositions[4]).add(handWorldPositions[8]).multiplyScalar(0.5);
+      }
+    } else { handVisible = false; isPinched = false; }
 
     if (res.faceLandmarks && res.faceLandmarks.length > 0) {
       faceVisible = true;
@@ -539,6 +649,8 @@
         badgeFace.className = "detect-badge " + (faceVisible ? "badge-on" : "badge-off");
         badgePose.className = "detect-badge " + (poseVisible ? "badge-on" : "badge-off");
 
+        pinchBadge.style.visibility = isPinched ? "visible" : "hidden";
+
         Object.values(trackers).forEach(t => {
           let isVis = false, srcArr = null;
           if (t.category === 'hand' && handVisible) { isVis = true; srcArr = handWorldPositions; }
@@ -557,15 +669,20 @@
           } else t.active = false;
         });
 
-        const currentHolder = trackers[currentBallTargetId];
-        if (currentHolder && currentHolder.active) {
-          Object.values(trackers).forEach(other => {
-            if (other.id !== currentBallTargetId && other.active) {
-              if (currentHolder.targetPos.distanceTo(other.targetPos) < PROXIMITY_TRANSFER_THRESHOLD) {
-                setBallTarget(other.id);
+        // Pinch transfer or proximity transfer
+        if (isPinched) {
+          setBallTarget('index');
+        } else {
+          const currentHolder = trackers[currentBallTargetId];
+          if (currentHolder && currentHolder.active) {
+            Object.values(trackers).forEach(other => {
+              if (other.id !== currentBallTargetId && other.active) {
+                if (currentHolder.targetPos.distanceTo(other.targetPos) < PROXIMITY_TRANSFER_THRESHOLD) {
+                  setBallTarget(other.id);
+                }
               }
-            }
-          });
+            });
+          }
         }
 
       } catch(e) {
@@ -585,8 +702,18 @@
       if (t.scale > 0) { t.mesh.rotation.x += 0.02; t.mesh.rotation.y += 0.02; }
     });
 
+    // --- BUTTERFLY POSITION & WING FLAP ANIMATION ---
+    const time = performance.now() * 0.012;
+    const flapAngle = Math.sin(time) * 0.85;
+    butterfly.leftWing.rotation.y = flapAngle;
+    butterfly.rightWing.rotation.y = -flapAngle;
+
     const activeBallHolder = trackers[currentBallTargetId];
-    if (activeBallHolder && activeBallHolder.active) {
+    if (isPinched) {
+      ballPos.lerp(pinchPosition, 0.4);
+      ballMesh.position.copy(ballPos);
+      if (ballScale < 1) ballScale = Math.min(1, ballScale + 0.1);
+    } else if (activeBallHolder && activeBallHolder.active) {
       ballPos.lerp(activeBallHolder.targetPos, 0.35);
       ballMesh.position.copy(ballPos);
       if (ballScale < 1) ballScale = Math.min(1, ballScale + 0.1);
@@ -595,6 +722,7 @@
     }
     ballMesh.scale.set(ballScale, ballScale, ballScale);
 
+    // Skeleton render updates
     const handSkelChk = document.getElementById('toggle-hand-skel');
     if (handSkelChk && handSkelChk.checked && handVisible) {
       const posAttr = handSkelGeom.getAttribute('position');
