@@ -484,23 +484,32 @@
     const screenAspect = window.innerWidth / window.innerHeight;
     const videoAspect = video.videoWidth / video.videoHeight;
     
-    let normX = x;
-    let normY = y;
+    let visW = 1, visH = 1;
 
-    if (screenAspect < videoAspect) {
-      const scale = screenAspect / videoAspect;
-      normX = (x - 0.5) / scale + 0.5;
+    if (screenAspect > videoAspect) {
+      visH = videoAspect / screenAspect; // Vertical crop
     } else {
-      const scale = videoAspect / screenAspect;
-      normY = (y - 0.5) / scale + 0.5;
+      visW = screenAspect / videoAspect; // Horizontal crop
     }
 
-    return { x: normX, y: normY };
+    const startX = (1 - visW) / 2;
+    const startY = (1 - visH) / 2;
+
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+
+    return {
+      x: clamp((x - startX) / visW, 0, 1),
+      y: clamp((y - startY) / visH, 0, 1)
+    };
   }
 
   function landmarkToWorld(landmark, outVec) {
     const mapped = mapToVisible(landmark.x, landmark.y);
-    _ndc.set(-(mapped.x * 2 - 1), -(mapped.y * 2 - 1), 0.5);
+    
+    // Invert x because video is mirrored via CSS transform: scaleX(-1)
+    const mirroredX = 1 - mapped.x;
+    
+    _ndc.set(mirroredX * 2 - 1, -(mapped.y * 2 - 1), 0.5);
     _ndc.unproject(camera);
     _dir.copy(_ndc).sub(camera.position).normalize();
     outVec.copy(camera.position).add(_dir.multiplyScalar(UNPROJECT_DISTANCE));
