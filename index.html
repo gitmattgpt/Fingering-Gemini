@@ -363,8 +363,8 @@
 
   buildUI();
 
-  // FIX 1: Exact Aspect Ratio and Projection Alignment for Video Stream overlay
   function mapToVisible(x, y) {
+    if (!video.videoWidth || !video.videoHeight) return { x, y };
     const videoAspect = video.videoWidth / video.videoHeight;
     const screenAspect = window.innerWidth / window.innerHeight;
     
@@ -389,7 +389,6 @@
 
   function landmarkToWorld(landmark, outVec) {
     const mapped = mapToVisible(landmark.x, landmark.y);
-    // Standard NDC unprojection conversion with correct Y orientation
     _ndc.set(-(mapped.x * 2 - 1), -(mapped.y * 2 - 1), 0.5);
     _ndc.unproject(camera);
     _dir.copy(_ndc).sub(camera.position).normalize();
@@ -417,7 +416,6 @@
 
       loadingText.innerText = "Loading Model Architecture...";
 
-      // FIX 2: Tuned Confidence Settings to prevent hand fallback drops
       holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
         baseOptions: {
           modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task",
@@ -437,6 +435,7 @@
 
     } catch (err) {
       loadingModal.style.display = 'none';
+      startBtn.style.display = 'block';
       statusText.innerText = "Error: " + err.message;
       console.error(err);
     }
@@ -453,12 +452,11 @@
       try {
         const res = holisticLandmarker.detectForVideo(video, performance.now());
 
-        // Hand landmark detection checking both left and right hands cleanly
         let handLandmarks = null;
         if (res.rightHandLandmarks && res.rightHandLandmarks.length > 0) {
-          handLandmarks = res.rightHandLandmarks;
+          handLandmarks = res.rightHandLandmarks[0] || res.rightHandLandmarks;
         } else if (res.leftHandLandmarks && res.leftHandLandmarks.length > 0) {
-          handLandmarks = res.leftHandLandmarks;
+          handLandmarks = res.leftHandLandmarks[0] || res.leftHandLandmarks;
         }
 
         if (handLandmarks && handLandmarks.length === 21) {
@@ -472,13 +470,13 @@
 
         if (res.faceLandmarks && res.faceLandmarks.length > 0) {
           faceVisible = true;
-          const facePoints = res.faceLandmarks[0];
+          const facePoints = res.faceLandmarks[0] || res.faceLandmarks;
           for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
         } else faceVisible = false;
 
         if (res.poseLandmarks && res.poseLandmarks.length > 0) {
           poseVisible = true;
-          const bodyPoints = res.poseLandmarks[0] ? res.poseLandmarks[0] : res.poseLandmarks;
+          const bodyPoints = res.poseLandmarks[0] || res.poseLandmarks;
           for (let i = 0; i < bodyPoints.length; i++) landmarkToWorld(bodyPoints[i], poseWorldPositions[i]);
         } else poseVisible = false;
 
@@ -596,3 +594,5 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 </script>
+</body>
+</html>
