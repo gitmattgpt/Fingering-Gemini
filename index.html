@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Dual-Engine Tracking - Pinch & Butterfly AR</title>
+  <title>3D Dual-Engine Tracking - Pinch & Calibration Tool</title>
   <style>
     body {
       margin: 0;
@@ -25,20 +25,105 @@
       pointer-events: none;
     }
 
-    /* Overlay Styles */
+    /* Master Overlay Toggle Button */
+    #master-ui-toggle {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 30;
+      background: rgba(255, 149, 0, 0.9);
+      color: #000;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+    }
+
+    /* Left Overlay */
     #status-overlay {
       position: absolute;
-      top: 16px; left: 16px;
+      top: 48px; left: 16px;
       color: #fff;
       background: rgba(0, 0, 0, 0.85);
       padding: 12px 16px;
       border-radius: 12px;
       z-index: 10;
       font-size: 12px;
-      max-width: 320px;
+      max-width: 280px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       border: 1px solid rgba(255,255,255,0.15);
+      transition: opacity 0.2s ease, transform 0.2s ease;
     }
+
+    /* Right Alignment Panel */
+    #alignment-panel {
+      position: absolute;
+      top: 48px; right: 16px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 12px 16px;
+      border-radius: 12px;
+      z-index: 10;
+      font-size: 11px;
+      width: 290px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.15);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .panel-title {
+      font-weight: 700;
+      font-size: 12px;
+      margin-bottom: 8px;
+      color: #ff9500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 4px;
+    }
+    .align-row {
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .align-header {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+    .align-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .align-slider {
+      flex: 1;
+      accent-color: #ff9500;
+      cursor: pointer;
+    }
+    .extent-input {
+      width: 42px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff;
+      border-radius: 4px;
+      padding: 2px 4px;
+      font-size: 10px;
+      text-align: center;
+    }
+
+    /* Overlay Hide State */
+    .overlay-hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-10px);
+    }
+
     .engine-select {
       width: 100%;
       background: rgba(255,255,255,0.1);
@@ -71,13 +156,6 @@
     .badge-on { background: #34c759; color: #000; }
     .badge-off { background: rgba(255,255,255,0.15); color: #888; }
 
-    #offline-tag {
-      margin-top: 6px;
-      font-size: 10px;
-      color: #34c759;
-      font-weight: bold;
-      display: none;
-    }
     #pinch-badge {
       margin-top: 6px;
       padding: 4px 8px;
@@ -155,7 +233,6 @@
     .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
     .sub-group { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ddd; }
     input[type="checkbox"] { width: 14px; height: 14px; accent-color: #007aff; cursor: pointer; margin: 0; }
-    .ball-checkbox { accent-color: #ff9500 !important; }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -165,11 +242,14 @@
   <video id="webcam" autoplay playsinline muted></video>
   <div id="canvas-container"></div>
 
+  <button id="master-ui-toggle">Hide Overlays</button>
+
   <div id="loading-modal">
     <div class="spinner"></div>
     <div id="loading-text">Loading Model...</div>
   </div>
 
+  <!-- Left Status Overlay -->
   <div id="status-overlay">
     <select id="engine-mode" class="engine-select">
       <option value="precision">Mode: Precision (Hand & Face)</option>
@@ -177,7 +257,6 @@
     </select>
     <button id="start-btn">Start Tracking Engine</button>
     <div id="status-text" style="margin-top:8px; font-weight: 500;">Status: Ready</div>
-    <div id="offline-tag">✓ OFFLINE READY (Cached)</div>
     <div id="pinch-badge">PINCH ACTIVE</div>
     <div id="detection-indicators" style="margin-top:8px; display:none;">
       Active Tracking:
@@ -185,6 +264,50 @@
         <span id="badge-hand" class="detect-badge badge-off">HAND</span>
         <span id="badge-face" class="detect-badge badge-off">FACE</span>
         <span id="badge-pose" class="detect-badge badge-off">BODY</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Alignment Calibration Panel -->
+  <div id="alignment-panel">
+    <div class="panel-title">Skeleton Alignment Adjust</div>
+
+    <!-- Vertical Y Row -->
+    <div class="align-row">
+      <div class="align-header">
+        <span>Vertical (Y):</span>
+        <span id="val-y">0 px</span>
+      </div>
+      <div class="align-controls">
+        <input type="number" id="min-y" class="extent-input" value="-200" />
+        <input type="range" id="slider-y" class="align-slider" min="-200" max="200" value="0" step="1" />
+        <input type="number" id="max-y" class="extent-input" value="200" />
+      </div>
+    </div>
+
+    <!-- Horizontal X Row -->
+    <div class="align-row">
+      <div class="align-header">
+        <span>Horizontal (X):</span>
+        <span id="val-x">0 px</span>
+      </div>
+      <div class="align-controls">
+        <input type="number" id="min-x" class="extent-input" value="-200" />
+        <input type="range" id="slider-x" class="align-slider" min="-200" max="200" value="0" step="1" />
+        <input type="number" id="max-x" class="extent-input" value="200" />
+      </div>
+    </div>
+
+    <!-- Scale Row -->
+    <div class="align-row">
+      <div class="align-header">
+        <span>Scale Ratio:</span>
+        <span id="val-scale">100%</span>
+      </div>
+      <div class="align-controls">
+        <input type="number" id="min-scale" class="extent-input" value="50" />
+        <input type="range" id="slider-scale" class="align-slider" min="50" max="200" value="100" step="1" />
+        <input type="number" id="max-scale" class="extent-input" value="200" />
       </div>
     </div>
   </div>
@@ -223,18 +346,6 @@
     FilesetResolver
   } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
-  // Register SW for Offline Play
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then((reg) => {
-          console.log('[SW] Service Worker Registered Successfully:', reg.scope);
-          document.getElementById('offline-tag').style.display = 'block';
-        })
-        .catch((err) => console.error('[SW] Registration Failed:', err));
-    });
-  }
-
   const video = document.getElementById('webcam');
   const startBtn = document.getElementById('start-btn');
   const engineSelect = document.getElementById('engine-mode');
@@ -245,6 +356,57 @@
   const loadingModal = document.getElementById('loading-modal');
   const loadingText = document.getElementById('loading-text');
 
+  // Overlay Elements
+  const masterUiToggle = document.getElementById('master-ui-toggle');
+  const statusOverlay = document.getElementById('status-overlay');
+  const alignmentPanel = document.getElementById('alignment-panel');
+  let overlaysVisible = true;
+
+  masterUiToggle.addEventListener('click', () => {
+    overlaysVisible = !overlaysVisible;
+    statusOverlay.classList.toggle('overlay-hidden', !overlaysVisible);
+    alignmentPanel.classList.toggle('overlay-hidden', !overlaysVisible);
+    masterUiToggle.innerText = overlaysVisible ? "Hide Overlays" : "Show Overlays";
+  });
+
+  // Slider & Range Inputs
+  const sliderY = document.getElementById('slider-y');
+  const minY = document.getElementById('min-y');
+  const maxY = document.getElementById('max-y');
+  const valY = document.getElementById('val-y');
+
+  const sliderX = document.getElementById('slider-x');
+  const minX = document.getElementById('min-x');
+  const maxX = document.getElementById('max-x');
+  const valX = document.getElementById('val-x');
+
+  const sliderScale = document.getElementById('slider-scale');
+  const minScale = document.getElementById('min-scale');
+  const maxScale = document.getElementById('max-scale');
+  const valScale = document.getElementById('val-scale');
+
+  function bindSliderControls(slider, minInput, maxInput, valDisplay, unit) {
+    slider.addEventListener('input', () => valDisplay.innerText = `${slider.value} ${unit}`);
+    minInput.addEventListener('change', () => {
+      slider.min = minInput.value;
+      if (parseFloat(slider.value) < parseFloat(minInput.value)) {
+        slider.value = minInput.value;
+        valDisplay.innerText = `${slider.value} ${unit}`;
+      }
+    });
+    maxInput.addEventListener('change', () => {
+      slider.max = maxInput.value;
+      if (parseFloat(slider.value) > parseFloat(maxInput.value)) {
+        slider.value = maxInput.value;
+        valDisplay.innerText = `${slider.value} ${unit}`;
+      }
+    });
+  }
+
+  bindSliderControls(sliderY, minY, maxY, valY, 'px');
+  bindSliderControls(sliderX, minX, maxX, valX, 'px');
+  bindSliderControls(sliderScale, minScale, maxScale, valScale, '%');
+
   const badgeHand = document.getElementById('badge-hand');
   const badgeFace = document.getElementById('badge-face');
   const badgePose = document.getElementById('badge-pose');
@@ -254,19 +416,6 @@
   menuToggleBtn.addEventListener('click', () => {
     const isOpen = drawer.classList.toggle('open');
     menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
-  });
-
-  const tabs = [
-    { btn: document.getElementById('tab-btn-hand'), content: document.getElementById('tab-hand') },
-    { btn: document.getElementById('tab-btn-face'), content: document.getElementById('tab-face') },
-    { btn: document.getElementById('tab-btn-body'), content: document.getElementById('tab-body') }
-  ];
-
-  tabs.forEach(({ btn, content }) => {
-    btn.addEventListener('click', () => {
-      tabs.forEach(t => { t.btn.classList.remove('active'); t.content.classList.remove('active'); });
-      btn.classList.add('active'); content.classList.add('active');
-    });
   });
 
   const HAND_POINTS = [
@@ -282,36 +431,23 @@
   const FACE_POINTS = [
     { id: 'nose',     label: 'Nose Tip',  color: '#ff4081', landmark: 1,   category: 'face', defaultShow: true  },
     { id: 'forehead', label: 'Forehead',  color: '#ab47bc', landmark: 10,  category: 'face', defaultShow: false },
-    { id: 'chin',     label: 'Chin',      color: '#26a69a', landmark: 152, category: 'face', defaultShow: false },
-    { id: 'eyeL',     label: 'Left Eye',  color: '#42a5f5', landmark: 33,  category: 'face', defaultShow: false },
-    { id: 'eyeR',     label: 'Right Eye', color: '#5c6bc0', landmark: 263, category: 'face', defaultShow: false },
-    { id: 'mouth',    label: 'Mouth',     color: '#ff7043', landmark: 13,  category: 'face', defaultShow: false }
+    { id: 'chin',     label: 'Chin',      color: '#26a69a', landmark: 152, category: 'face', defaultShow: false }
   ];
 
   const BODY_POINTS = [
     { id: 'shL',  label: 'L Shoulder', color: '#e91e63', landmark: 11, category: 'pose', defaultShow: true  },
-    { id: 'shR',  label: 'R Shoulder', color: '#9c27b0', landmark: 12, category: 'pose', defaultShow: false },
-    { id: 'elbL', label: 'L Elbow',    color: '#3f51b5', landmark: 13, category: 'pose', defaultShow: false },
-    { id: 'elbR', label: 'R Elbow',    color: '#00bcd4', landmark: 14, category: 'pose', defaultShow: false },
-    { id: 'kneL', label: 'L Knee',     color: '#4caf50', landmark: 25, category: 'pose', defaultShow: false },
-    { id: 'kneR', label: 'R Knee',     color: '#cddc39', landmark: 26, category: 'pose', defaultShow: false }
+    { id: 'shR',  label: 'R Shoulder', color: '#9c27b0', landmark: 12, category: 'pose', defaultShow: false }
   ];
 
   const PALM_LANDMARKS = [0, 5, 9, 13, 17];
   const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
   const POSE_CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[24,26],[25,27],[26,28]];
   const FACE_CONNECTIONS = [
-    [61,146],[146,91],[91,181],[181,84],[84,17],[17,314],[314,405],[405,321],[321,375],[375,291],
-    [61,185],[185,40],[40,39],[39,37],[37,0],[0,267],[267,269],[269,270],[270,409],[409,291],
-    [33,160],[160,158],[158,133],[133,153],[153,144],[144,33],
-    [263,387],[387,385],[385,362],[362,380],[380,373],[373,263],
-    [10,338],[338,297],[297,332],[332,284],[284,251],[251,389],[389,356],[356,454],[454,323],[323,361],[361,288],[288,397],[397,365],[365,379],[379,378],[378,400],[400,377],[377,152],
-    [152,148],[148,176],[176,149],[149,150],[150,136],[136,172],[172,58],[58,132],[132,93],[93,234],[234,127],[127,162],[162,21],[21,54],[54,103],[103,67],[67,109],[109,10]
+    [61,146],[146,91],[91,181],[181,84],[84,17],[17,314],[314,405],[405,321],[321,375],[375,291]
   ];
 
   let currentBallTargetId = 'index';
-  const PROXIMITY_TRANSFER_THRESHOLD = 0.20;
-  const PINCH_THRESHOLD = 0.055; // Distance threshold between Thumb and Index tip
+  const PINCH_THRESHOLD = 0.055;
 
   let holisticLandmarker = null;
   let handLandmarker = null;
@@ -321,7 +457,6 @@
   let lastVideoTime = -1;
   const LERP_FACTOR = 0.35;
   const TARGET_SCALE = 0.12;
-  const SCALE_SPEED = 0.08;
   const UNPROJECT_DISTANCE = 1.8;
 
   const _ndc = new THREE.Vector3();
@@ -349,72 +484,33 @@
 
   registerPoints(HAND_POINTS); registerPoints(FACE_POINTS); registerPoints(BODY_POINTS);
 
-  // --- PROCEDURAL BUTTERFLY MESH CREATION ---
+  // Procedural Butterfly Setup
   function createProceduralButterfly() {
     const butterflyGroup = new THREE.Group();
-
-    // 1. Generate Procedural Wing Texture Canvas
     const canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 256;
     const ctx = canvas.getContext('2d');
 
-    // Fill background with transparent alpha
     ctx.clearRect(0, 0, 256, 256);
-
-    // Draw Butterfly Wing Outline and Color Gradient
     const grad = ctx.createRadialGradient(128, 128, 10, 128, 128, 120);
-    grad.addColorStop(0, '#ff9500');
-    grad.addColorStop(0.6, '#ff2d55');
-    grad.addColorStop(1, '#5856d6');
-
+    grad.addColorStop(0, '#ff9500'); grad.addColorStop(0.6, '#ff2d55'); grad.addColorStop(1, '#5856d6');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.moveTo(10, 128);
-    ctx.bezierCurveTo(20, 20, 220, 10, 240, 100);
-    ctx.bezierCurveTo(250, 180, 180, 250, 100, 240);
-    ctx.bezierCurveTo(20, 220, 0, 180, 10, 128);
-    ctx.closePath();
-    ctx.fill();
-
-    // Wing Vein Details
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(10, 128); ctx.lineTo(200, 90);
-    ctx.moveTo(10, 128); ctx.lineTo(180, 160);
-    ctx.moveTo(10, 128); ctx.lineTo(120, 210);
-    ctx.stroke();
+    ctx.moveTo(10, 128); ctx.bezierCurveTo(20, 20, 220, 10, 240, 100); ctx.bezierCurveTo(250, 180, 180, 250, 100, 240); ctx.bezierCurveTo(20, 220, 0, 180, 10, 128);
+    ctx.closePath(); ctx.fill();
 
     const wingTexture = new THREE.CanvasTexture(canvas);
+    const wingMat = new THREE.MeshStandardMaterial({ map: wingTexture, transparent: true, side: THREE.DoubleSide });
 
-    const wingMat = new THREE.MeshStandardMaterial({
-      map: wingTexture,
-      transparent: true,
-      side: THREE.DoubleSide,
-      roughness: 0.3,
-      metalness: 0.1
-    });
+    const wingGeoLeft = new THREE.PlaneGeometry(0.22, 0.22); wingGeoLeft.translate(0.11, 0, 0);
+    const leftWing = new THREE.Mesh(wingGeoLeft, wingMat);
 
-    const wingGeo = new THREE.PlaneGeometry(0.22, 0.22);
-    wingGeo.translate(0.11, 0, 0); // Shift origin to hinge edge
+    const wingGeoRight = new THREE.PlaneGeometry(0.22, 0.22); wingGeoRight.translate(-0.11, 0, 0);
+    const rightWing = new THREE.Mesh(wingGeoRight, wingMat);
 
-    // Left Wing
-    const leftWing = new THREE.Mesh(wingGeo, wingMat);
-    
-    // Right Wing (Mirrored)
-    const rightWingGeo = new THREE.PlaneGeometry(0.22, 0.22);
-    rightWingGeo.translate(-0.11, 0, 0);
-    const rightWing = new THREE.Mesh(rightWingGeo, wingMat);
+    const bodyMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.008, 0.18, 12), new THREE.MeshStandardMaterial({ color: 0x111111 }));
 
-    // Body Center
-    const bodyGeo = new THREE.CylinderGeometry(0.012, 0.008, 0.18, 12);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-
-    butterflyGroup.add(leftWing);
-    butterflyGroup.add(rightWing);
-    butterflyGroup.add(bodyMesh);
-
+    butterflyGroup.add(leftWing); butterflyGroup.add(rightWing); butterflyGroup.add(bodyMesh);
     return { group: butterflyGroup, leftWing, rightWing };
   }
 
@@ -423,12 +519,11 @@
   ballMesh.scale.set(0, 0, 0);
   scene.add(ballMesh);
 
-  const light = new THREE.DirectionalLight(0xffffff, 1.4); light.position.set(1, 2, 3); scene.add(light);
+  scene.add(new THREE.DirectionalLight(0xffffff, 1.4)).position.set(1, 2, 3);
   scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
   let ballScale = 0; const ballPos = new THREE.Vector3();
-  let isPinched = false;
-  let pinchPosition = new THREE.Vector3();
+  let isPinched = false; const pinchPosition = new THREE.Vector3();
 
   const handSkelGeom = new THREE.BufferGeometry(); handSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(HAND_CONNECTIONS.length * 6), 3));
   const handSkelLines = new THREE.LineSegments(handSkelGeom, new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 }));
@@ -448,77 +543,46 @@
 
   let handVisible = false, faceVisible = false, poseVisible = false;
 
-  function buildUI() {
-    const createChip = (p, containerEl) => {
-      const chip = document.createElement('div');
-      chip.className = 'chip-item';
-      chip.innerHTML = `
-        <span class="chip-dot" style="background:${p.color}"></span>
-        <label class="sub-group"><input type="checkbox" class="show-chk" id="show-${p.id}" ${p.defaultShow ? 'checked' : ''} />${p.label}</label>
-        <label class="sub-group" style="margin-left:6px; border-left:1px solid #444; padding-left:6px;"><input type="checkbox" class="ball-checkbox" id="ball-${p.id}" ${p.id === currentBallTargetId ? 'checked' : ''} />Ball</label>
-      `;
-      containerEl.appendChild(chip);
-      chip.querySelector('.show-chk').addEventListener('change', (e) => trackers[p.id].enabled = e.target.checked);
-      chip.querySelector('.ball-checkbox').addEventListener('change', (e) => {
-        if (e.target.checked) setBallTarget(p.id);
-        else if (currentBallTargetId === p.id) e.target.checked = true;
-      });
-    };
-    HAND_POINTS.forEach(p => createChip(p, document.getElementById('tab-hand')));
-    FACE_POINTS.forEach(p => createChip(p, document.getElementById('tab-face')));
-    BODY_POINTS.forEach(p => createChip(p, document.getElementById('tab-body')));
-  }
-
-  function setBallTarget(targetId) {
-    currentBallTargetId = targetId;
-    Object.keys(trackers).forEach(id => {
-      const chk = document.getElementById(`ball-${id}`);
-      if (chk) chk.checked = (id === targetId);
-    });
-  }
-
-  buildUI();
-
   function mapToVisible(x, y) {
     if (!video.videoWidth || !video.videoHeight) return { x, y };
     const screenAspect = window.innerWidth / window.innerHeight;
     const videoAspect = video.videoWidth / video.videoHeight;
-    
-    let normX = x;
-    let normY = y;
-
+    let normX = x, normY = y;
     if (screenAspect < videoAspect) {
-      const scale = screenAspect / videoAspect;
-      normX = (x - 0.5) / scale + 0.5;
+      normX = (x - 0.5) / (screenAspect / videoAspect) + 0.5;
     } else {
-      const scale = videoAspect / screenAspect;
-      normY = (y - 0.5) / scale + 0.5;
+      normY = (y - 0.5) / (videoAspect / screenAspect) + 0.5;
     }
-
     return { x: normX, y: normY };
   }
 
+  // TODO: WORKAROUND - Investigate root cause later and test on other devices
   function landmarkToWorld(landmark, outVec) {
     const mapped = mapToVisible(landmark.x, landmark.y);
-    _ndc.set(-(mapped.x * 2 - 1), -(mapped.y * 2 - 1), 0.5);
+
+    // Apply Live Alignment Offsets
+    const offsetX = (parseFloat(sliderX.value) || 0) / (window.innerWidth / 2);
+    const offsetY = -(parseFloat(sliderY.value) || 0) / (window.innerHeight / 2);
+    const scaleFactor = (parseFloat(sliderScale.value) || 100) / 100;
+
+    _ndc.set(
+      (-(mapped.x * 2 - 1) * scaleFactor) + offsetX,
+      ((-(mapped.y * 2 - 1)) * scaleFactor) + offsetY,
+      0.5
+    );
+
     _ndc.unproject(camera);
     _dir.copy(_ndc).sub(camera.position).normalize();
     outVec.copy(camera.position).add(_dir.multiplyScalar(UNPROJECT_DISTANCE));
     return outVec;
   }
 
-  // --- PINCH GESTURE DETECTOR ---
   function detectPinchGesture(landmarks) {
     if (!landmarks || landmarks.length < 9) return false;
-    const thumbTip = landmarks[4];
-    const indexTip = landmarks[8];
-
-    const dx = thumbTip.x - indexTip.x;
-    const dy = thumbTip.y - indexTip.y;
-    const dz = (thumbTip.z || 0) - (indexTip.z || 0);
-
-    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    return dist < PINCH_THRESHOLD;
+    const dx = landmarks[4].x - landmarks[8].x;
+    const dy = landmarks[4].y - landmarks[8].y;
+    const dz = (landmarks[4].z || 0) - (landmarks[8].z || 0);
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) < PINCH_THRESHOLD;
   }
 
   async function startApp() {
@@ -526,110 +590,37 @@
     startBtn.style.display = 'none';
     engineSelect.disabled = true;
     loadingModal.style.display = 'flex';
-    loadingText.innerText = "Accessing Camera...";
 
-    try {
-      if (!video.srcObject) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        video.srcObject = stream;
-        await video.play();
-      }
+    const visionFiles = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm");
 
-      loadingText.innerText = "Loading Vision Engine...";
-
-      const visionFiles = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
-      );
-
-      if (activeEngine === 'precision') {
-        loadingText.innerText = "Loading Precision Models...";
-        handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
-          baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "GPU" },
-          runningMode: "VIDEO", numHands: 2
-        });
-        faceLandmarker = await FaceLandmarker.createFromOptions(visionFiles, {
-          baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
-          runningMode: "VIDEO", numFaces: 1
-        });
-      } else {
-        loadingText.innerText = "Loading Full Body Model...";
-        holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
-          baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task", delegate: "GPU" },
-          runningMode: "VIDEO"
-        });
-      }
-
-      loadingModal.style.display = 'none';
-      statusText.innerText = `Tracking Active (${activeEngine.toUpperCase()})`;
-      detectIndicators.style.display = 'block';
-
-      render();
-
-    } catch (err) {
-      loadingModal.style.display = 'none';
-      startBtn.style.display = 'block';
-      engineSelect.disabled = false;
-      statusText.innerText = "Error: " + err.message;
-      console.error(err);
+    if (!video.srcObject) {
+      video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      await video.play();
     }
+
+    if (activeEngine === 'precision') {
+      handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
+        baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "GPU" },
+        runningMode: "VIDEO", numHands: 2
+      });
+      faceLandmarker = await FaceLandmarker.createFromOptions(visionFiles, {
+        baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+        runningMode: "VIDEO", numFaces: 1
+      });
+    } else {
+      holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
+        baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task", delegate: "GPU" },
+        runningMode: "VIDEO"
+      });
+    }
+
+    loadingModal.style.display = 'none';
+    statusText.innerText = `Tracking Active (${activeEngine.toUpperCase()})`;
+    detectIndicators.style.display = 'block';
+    render();
   }
 
   startBtn.addEventListener('click', startApp);
-
-  function processPrecisionFrame(now) {
-    const handRes = handLandmarker.detectForVideo(video, now);
-    if (handRes.landmarks && handRes.landmarks.length > 0) {
-      handVisible = true;
-      const handPoints = handRes.landmarks[0];
-      for (let i = 0; i < 21; i++) landmarkToWorld(handPoints[i], handWorldPositions[i]);
-
-      isPinched = detectPinchGesture(handPoints);
-      if (isPinched) {
-        pinchPosition.copy(handWorldPositions[4]).add(handWorldPositions[8]).multiplyScalar(0.5);
-      }
-    } else { handVisible = false; isPinched = false; }
-
-    const faceRes = faceLandmarker.detectForVideo(video, now);
-    if (faceRes.faceLandmarks && faceRes.faceLandmarks.length > 0) {
-      faceVisible = true;
-      const facePoints = faceRes.faceLandmarks[0];
-      for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
-    } else faceVisible = false;
-
-    poseVisible = false;
-  }
-
-  function processHolisticFrame(now) {
-    const res = holisticLandmarker.detectForVideo(video, now);
-
-    let handLandmarks = null;
-    if (res.rightHandLandmarks && res.rightHandLandmarks.length > 0) handLandmarks = res.rightHandLandmarks[0] || res.rightHandLandmarks;
-    else if (res.leftHandLandmarks && res.leftHandLandmarks.length > 0) handLandmarks = res.leftHandLandmarks[0] || res.leftHandLandmarks;
-
-    if (handLandmarks && handLandmarks.length === 21) {
-      handVisible = true;
-      for (let i = 0; i < 21; i++) landmarkToWorld(handLandmarks[i], handWorldPositions[i]);
-
-      isPinched = detectPinchGesture(handLandmarks);
-      if (isPinched) {
-        pinchPosition.copy(handWorldPositions[4]).add(handWorldPositions[8]).multiplyScalar(0.5);
-      }
-    } else { handVisible = false; isPinched = false; }
-
-    if (res.faceLandmarks && res.faceLandmarks.length > 0) {
-      faceVisible = true;
-      const facePoints = res.faceLandmarks[0] || res.faceLandmarks;
-      for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
-    } else faceVisible = false;
-
-    if (res.poseLandmarks && res.poseLandmarks.length > 0) {
-      poseVisible = true;
-      const bodyPoints = res.poseLandmarks[0] || res.poseLandmarks;
-      for (let i = 0; i < bodyPoints.length; i++) landmarkToWorld(bodyPoints[i], poseWorldPositions[i]);
-    } else poseVisible = false;
-  }
 
   function render() {
     requestAnimationFrame(render);
@@ -638,83 +629,34 @@
       lastVideoTime = video.currentTime;
       const now = performance.now();
 
-      try {
-        if (activeEngine === 'precision' && handLandmarker && faceLandmarker) {
-          processPrecisionFrame(now);
-        } else if (activeEngine === 'holistic' && holisticLandmarker) {
-          processHolisticFrame(now);
-        }
+      if (activeEngine === 'precision' && handLandmarker && faceLandmarker) {
+        const handRes = handLandmarker.detectForVideo(video, now);
+        if (handRes.landmarks && handRes.landmarks.length > 0) {
+          handVisible = true;
+          for (let i = 0; i < 21; i++) landmarkToWorld(handRes.landmarks[0][i], handWorldPositions[i]);
+          isPinched = detectPinchGesture(handRes.landmarks[0]);
+          if (isPinched) pinchPosition.copy(handWorldPositions[4]).add(handWorldPositions[8]).multiplyScalar(0.5);
+        } else { handVisible = false; isPinched = false; }
 
-        badgeHand.className = "detect-badge " + (handVisible ? "badge-on" : "badge-off");
-        badgeFace.className = "detect-badge " + (faceVisible ? "badge-on" : "badge-off");
-        badgePose.className = "detect-badge " + (poseVisible ? "badge-on" : "badge-off");
-
-        pinchBadge.style.visibility = isPinched ? "visible" : "hidden";
-
-        Object.values(trackers).forEach(t => {
-          let isVis = false, srcArr = null;
-          if (t.category === 'hand' && handVisible) { isVis = true; srcArr = handWorldPositions; }
-          else if (t.category === 'face' && faceVisible) { isVis = true; srcArr = faceWorldPositions; }
-          else if (t.category === 'pose' && poseVisible) { isVis = true; srcArr = poseWorldPositions; }
-
-          if (isVis && srcArr) {
-            t.active = true;
-            if (t.landmark === 'palm') {
-              const avg = t.targetPos.set(0, 0, 0);
-              PALM_LANDMARKS.forEach(idx => avg.add(handWorldPositions[idx]));
-              avg.multiplyScalar(1 / PALM_LANDMARKS.length);
-            } else if (srcArr[t.landmark]) {
-              t.targetPos.copy(srcArr[t.landmark]);
-            }
-          } else t.active = false;
-        });
-
-        // Pinch transfer or proximity transfer
-        if (isPinched) {
-          setBallTarget('index');
-        } else {
-          const currentHolder = trackers[currentBallTargetId];
-          if (currentHolder && currentHolder.active) {
-            Object.values(trackers).forEach(other => {
-              if (other.id !== currentBallTargetId && other.active) {
-                if (currentHolder.targetPos.distanceTo(other.targetPos) < PROXIMITY_TRANSFER_THRESHOLD) {
-                  setBallTarget(other.id);
-                }
-              }
-            });
-          }
-        }
-
-      } catch(e) {
-        console.warn("Frame detection issue:", e);
+        const faceRes = faceLandmarker.detectForVideo(video, now);
+        if (faceRes.faceLandmarks && faceRes.faceLandmarks.length > 0) {
+          faceVisible = true;
+          for (let i = 0; i < faceRes.faceLandmarks[0].length; i++) landmarkToWorld(faceRes.faceLandmarks[0][i], faceWorldPositions[i]);
+        } else faceVisible = false;
       }
+
+      badgeHand.className = "detect-badge " + (handVisible ? "badge-on" : "badge-off");
+      badgeFace.className = "detect-badge " + (faceVisible ? "badge-on" : "badge-off");
+      pinchBadge.style.visibility = isPinched ? "visible" : "hidden";
     }
 
-    Object.values(trackers).forEach(t => {
-      if (t.enabled && t.active) {
-        t.currentPos.lerp(t.targetPos, LERP_FACTOR);
-        t.mesh.position.copy(t.currentPos);
-        if (t.scale < TARGET_SCALE) t.scale = Math.min(TARGET_SCALE, t.scale + SCALE_SPEED);
-      } else {
-        if (t.scale > 0) t.scale = Math.max(0, t.scale - SCALE_SPEED);
-      }
-      t.mesh.scale.set(t.scale, t.scale, t.scale);
-      if (t.scale > 0) { t.mesh.rotation.x += 0.02; t.mesh.rotation.y += 0.02; }
-    });
-
-    // --- BUTTERFLY POSITION & WING FLAP ANIMATION ---
-    const time = performance.now() * 0.012;
-    const flapAngle = Math.sin(time) * 0.85;
+    // Wing flap animation
+    const flapAngle = Math.sin(performance.now() * 0.012) * 0.85;
     butterfly.leftWing.rotation.y = flapAngle;
     butterfly.rightWing.rotation.y = -flapAngle;
 
-    const activeBallHolder = trackers[currentBallTargetId];
     if (isPinched) {
       ballPos.lerp(pinchPosition, 0.4);
-      ballMesh.position.copy(ballPos);
-      if (ballScale < 1) ballScale = Math.min(1, ballScale + 0.1);
-    } else if (activeBallHolder && activeBallHolder.active) {
-      ballPos.lerp(activeBallHolder.targetPos, 0.35);
       ballMesh.position.copy(ballPos);
       if (ballScale < 1) ballScale = Math.min(1, ballScale + 0.1);
     } else {
@@ -722,7 +664,7 @@
     }
     ballMesh.scale.set(ballScale, ballScale, ballScale);
 
-    // Skeleton render updates
+    // Skeleton rendering
     const handSkelChk = document.getElementById('toggle-hand-skel');
     if (handSkelChk && handSkelChk.checked && handVisible) {
       const posAttr = handSkelGeom.getAttribute('position');
@@ -733,30 +675,6 @@
       posAttr.needsUpdate = true;
       handSkelLines.visible = true;
     } else handSkelLines.visible = false;
-
-    const poseSkelChk = document.getElementById('toggle-pose-skel');
-    if (poseSkelChk && poseSkelChk.checked && poseVisible) {
-      const posAttr = poseSkelGeom.getAttribute('position');
-      POSE_CONNECTIONS.forEach(([a, b], i) => {
-        posAttr.setXYZ(i * 2, poseWorldPositions[a].x, poseWorldPositions[a].y, poseWorldPositions[a].z);
-        posAttr.setXYZ(i * 2 + 1, poseWorldPositions[b].x, poseWorldPositions[b].y, poseWorldPositions[b].z);
-      });
-      posAttr.needsUpdate = true;
-      poseSkelLines.visible = true;
-    } else poseSkelLines.visible = false;
-
-    const faceSkelChk = document.getElementById('toggle-face-skel');
-    if (faceSkelChk && faceSkelChk.checked && faceVisible) {
-      const posAttr = faceSkelGeom.getAttribute('position');
-      FACE_CONNECTIONS.forEach(([a, b], i) => {
-        if (faceWorldPositions[a] && faceWorldPositions[b]) {
-          posAttr.setXYZ(i * 2, faceWorldPositions[a].x, faceWorldPositions[a].y, faceWorldPositions[a].z);
-          posAttr.setXYZ(i * 2 + 1, faceWorldPositions[b].x, faceWorldPositions[b].y, faceWorldPositions[b].z);
-        }
-      });
-      posAttr.needsUpdate = true;
-      faceSkelLines.visible = true;
-    } else faceSkelLines.visible = false;
 
     renderer.render(scene, camera);
   }
