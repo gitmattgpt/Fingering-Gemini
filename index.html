@@ -186,393 +186,413 @@
   </div>
 
   <script type="module">
-    import { HolisticLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+  import { HolisticLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
-    // Service Worker Registration
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(reg => console.log('SW Registered:', reg))
-          .catch(err => console.error('SW Error:', err));
-      });
-    }
-
-    const video = document.getElementById('webcam');
-    const startBtn = document.getElementById('start-btn');
-    const statusText = document.getElementById('status-text');
-    const container = document.getElementById('canvas-container');
-    const drawer = document.getElementById('control-drawer');
-    const menuToggleBtn = document.getElementById('menu-toggle-btn');
-    const loadingModal = document.getElementById('loading-modal');
-    const loadingText = document.getElementById('loading-text');
-
-    const badgeHand = document.getElementById('badge-hand');
-    const badgeFace = document.getElementById('badge-face');
-    const badgePose = document.getElementById('badge-pose');
-    const detectIndicators = document.getElementById('detection-indicators');
-
-    menuToggleBtn.addEventListener('click', () => {
-      const isOpen = drawer.classList.toggle('open');
-      menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('SW Registered:', reg))
+        .catch(err => console.error('SW Error:', err));
     });
+  }
 
-    const tabs = [
-      { btn: document.getElementById('tab-btn-hand'), content: document.getElementById('tab-hand') },
-      { btn: document.getElementById('tab-btn-face'), content: document.getElementById('tab-face') },
-      { btn: document.getElementById('tab-btn-body'), content: document.getElementById('tab-body') }
-    ];
+  const video = document.getElementById('webcam');
+  const startBtn = document.getElementById('start-btn');
+  const statusText = document.getElementById('status-text');
+  const container = document.getElementById('canvas-container');
+  const drawer = document.getElementById('control-drawer');
+  const menuToggleBtn = document.getElementById('menu-toggle-btn');
+  const loadingModal = document.getElementById('loading-modal');
+  const loadingText = document.getElementById('loading-text');
 
-    tabs.forEach(({ btn, content }) => {
-      btn.addEventListener('click', () => {
-        tabs.forEach(t => { t.btn.classList.remove('active'); t.content.classList.remove('active'); });
-        btn.classList.add('active'); content.classList.add('active');
-      });
+  const badgeHand = document.getElementById('badge-hand');
+  const badgeFace = document.getElementById('badge-face');
+  const badgePose = document.getElementById('badge-pose');
+  const detectIndicators = document.getElementById('detection-indicators');
+
+  menuToggleBtn.addEventListener('click', () => {
+    const isOpen = drawer.classList.toggle('open');
+    menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
+  });
+
+  const tabs = [
+    { btn: document.getElementById('tab-btn-hand'), content: document.getElementById('tab-hand') },
+    { btn: document.getElementById('tab-btn-face'), content: document.getElementById('tab-face') },
+    { btn: document.getElementById('tab-btn-body'), content: document.getElementById('tab-body') }
+  ];
+
+  tabs.forEach(({ btn, content }) => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(t => { t.btn.classList.remove('active'); t.content.classList.remove('active'); });
+      btn.classList.add('active'); content.classList.add('active');
     });
+  });
 
-    const HAND_POINTS = [
-      { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  category: 'hand', defaultShow: false },
-      { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  category: 'hand', defaultShow: false },
-      { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  category: 'hand', defaultShow: true  },
-      { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, category: 'hand', defaultShow: false },
-      { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, category: 'hand', defaultShow: false },
-      { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, category: 'hand', defaultShow: false },
-      { id: 'palm',   label: 'Palm',       color: '#ff9800', landmark: 'palm', category: 'hand', defaultShow: false }
-    ];
+  const HAND_POINTS = [
+    { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  category: 'hand', defaultShow: false },
+    { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  category: 'hand', defaultShow: false },
+    { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  category: 'hand', defaultShow: true  },
+    { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, category: 'hand', defaultShow: false },
+    { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, category: 'hand', defaultShow: false },
+    { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, category: 'hand', defaultShow: false },
+    { id: 'palm',   label: 'Palm',       color: '#ff9800', landmark: 'palm', category: 'hand', defaultShow: false }
+  ];
 
-    const FACE_POINTS = [
-      { id: 'nose',     label: 'Nose Tip',  color: '#ff4081', landmark: 1,   category: 'face', defaultShow: true  },
-      { id: 'forehead', label: 'Forehead',  color: '#ab47bc', landmark: 10,  category: 'face', defaultShow: false },
-      { id: 'chin',     label: 'Chin',      color: '#26a69a', landmark: 152, category: 'face', defaultShow: false },
-      { id: 'eyeL',     label: 'Left Eye',  color: '#42a5f5', landmark: 33,  category: 'face', defaultShow: false },
-      { id: 'eyeR',     label: 'Right Eye', color: '#5c6bc0', landmark: 263, category: 'face', defaultShow: false },
-      { id: 'mouth',    label: 'Mouth',     color: '#ff7043', landmark: 13,  category: 'face', defaultShow: false }
-    ];
+  const FACE_POINTS = [
+    { id: 'nose',     label: 'Nose Tip',  color: '#ff4081', landmark: 1,   category: 'face', defaultShow: true  },
+    { id: 'forehead', label: 'Forehead',  color: '#ab47bc', landmark: 10,  category: 'face', defaultShow: false },
+    { id: 'chin',     label: 'Chin',      color: '#26a69a', landmark: 152, category: 'face', defaultShow: false },
+    { id: 'eyeL',     label: 'Left Eye',  color: '#42a5f5', landmark: 33,  category: 'face', defaultShow: false },
+    { id: 'eyeR',     label: 'Right Eye', color: '#5c6bc0', landmark: 263, category: 'face', defaultShow: false },
+    { id: 'mouth',    label: 'Mouth',     color: '#ff7043', landmark: 13,  category: 'face', defaultShow: false }
+  ];
 
-    const BODY_POINTS = [
-      { id: 'shL',  label: 'L Shoulder', color: '#e91e63', landmark: 11, category: 'pose', defaultShow: true  },
-      { id: 'shR',  label: 'R Shoulder', color: '#9c27b0', landmark: 12, category: 'pose', defaultShow: false },
-      { id: 'elbL', label: 'L Elbow',    color: '#3f51b5', landmark: 13, category: 'pose', defaultShow: false },
-      { id: 'elbR', label: 'R Elbow',    color: '#00bcd4', landmark: 14, category: 'pose', defaultShow: false },
-      { id: 'kneL', label: 'L Knee',     color: '#4caf50', landmark: 25, category: 'pose', defaultShow: false },
-      { id: 'kneR', label: 'R Knee',     color: '#cddc39', landmark: 26, category: 'pose', defaultShow: false }
-    ];
+  const BODY_POINTS = [
+    { id: 'shL',  label: 'L Shoulder', color: '#e91e63', landmark: 11, category: 'pose', defaultShow: true  },
+    { id: 'shR',  label: 'R Shoulder', color: '#9c27b0', landmark: 12, category: 'pose', defaultShow: false },
+    { id: 'elbL', label: 'L Elbow',    color: '#3f51b5', landmark: 13, category: 'pose', defaultShow: false },
+    { id: 'elbR', label: 'R Elbow',    color: '#00bcd4', landmark: 14, category: 'pose', defaultShow: false },
+    { id: 'kneL', label: 'L Knee',     color: '#4caf50', landmark: 25, category: 'pose', defaultShow: false },
+    { id: 'kneR', label: 'R Knee',     color: '#cddc39', landmark: 26, category: 'pose', defaultShow: false }
+  ];
 
-    const PALM_LANDMARKS = [0, 5, 9, 13, 17];
-    const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
-    const POSE_CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[24,26],[25,27],[26,28]];
+  const PALM_LANDMARKS = [0, 5, 9, 13, 17];
+  const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+  const POSE_CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[24,26],[25,27],[26,28]];
 
-    const FACE_CONNECTIONS = [
-      [61,146],[146,91],[91,181],[181,84],[84,17],[17,314],[314,405],[405,321],[321,375],[375,291],
-      [61,185],[185,40],[40,39],[39,37],[37,0],[0,267],[267,269],[269,270],[270,409],[409,291],
-      [33,160],[160,158],[158,133],[133,153],[153,144],[144,33],
-      [263,387],[387,385],[385,362],[362,380],[380,373],[373,263],
-      [10,338],[338,297],[297,332],[332,284],[284,251],[251,389],[389,356],[356,454],[454,323],[323,361],[361,288],[288,397],[397,365],[365,379],[379,378],[378,400],[400,377],[377,152],
-      [152,148],[148,176],[176,149],[149,150],[150,136],[136,172],[172,58],[58,132],[132,93],[93,234],[234,127],[127,162],[162,21],[21,54],[54,103],[103,67],[67,109],[109,10]
-    ];
+  const FACE_CONNECTIONS = [
+    [61,146],[146,91],[91,181],[181,84],[84,17],[17,314],[314,405],[405,321],[321,375],[375,291],
+    [61,185],[185,40],[40,39],[39,37],[37,0],[0,267],[267,269],[269,270],[270,409],[409,291],
+    [33,160],[160,158],[158,133],[133,153],[153,144],[144,33],
+    [263,387],[387,385],[385,362],[362,380],[380,373],[373,263],
+    [10,338],[338,297],[297,332],[332,284],[284,251],[251,389],[389,356],[356,454],[454,323],[323,361],[361,288],[288,397],[397,365],[365,379],[379,378],[378,400],[400,377],[377,152],
+    [152,148],[148,176],[176,149],[149,150],[150,136],[136,172],[172,58],[58,132],[132,93],[93,234],[234,127],[127,162],[162,21],[21,54],[54,103],[103,67],[67,109],[109,10]
+  ];
 
-    let currentBallTargetId = 'index';
-    const PROXIMITY_TRANSFER_THRESHOLD = 0.18;
+  let currentBallTargetId = 'index';
+  const PROXIMITY_TRANSFER_THRESHOLD = 0.18;
 
-    let holisticLandmarker = null;
-    let lastVideoTime = -1;
+  let holisticLandmarker = null;
+  let lastVideoTime = -1;
 
-    const LERP_FACTOR = 0.3;
-    const TARGET_SCALE = 0.12;
-    const SCALE_SPEED = 0.08;
-    const UNPROJECT_DISTANCE = 1.8;
+  const LERP_FACTOR = 0.35;
+  const TARGET_SCALE = 0.12;
+  const SCALE_SPEED = 0.08;
+  const UNPROJECT_DISTANCE = 1.8;
 
-    const _ndc = new THREE.Vector3();
-    const _dir = new THREE.Vector3();
+  const _ndc = new THREE.Vector3();
+  const _dir = new THREE.Vector3();
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 2;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.z = 2;
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
 
-    const trackers = {};
+  const trackers = {};
 
-    function registerPoints(pointsList) {
-      pointsList.forEach(p => {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: p.color }));
-        mesh.scale.set(0, 0, 0);
-        scene.add(mesh);
-        trackers[p.id] = { id: p.id, label: p.label, mesh, enabled: p.defaultShow, landmark: p.landmark, category: p.category, active: false, currentPos: new THREE.Vector3(), targetPos: new THREE.Vector3(), scale: 0 };
+  function registerPoints(pointsList) {
+    pointsList.forEach(p => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: p.color }));
+      mesh.scale.set(0, 0, 0);
+      scene.add(mesh);
+      trackers[p.id] = { id: p.id, label: p.label, mesh, enabled: p.defaultShow, landmark: p.landmark, category: p.category, active: false, currentPos: new THREE.Vector3(), targetPos: new THREE.Vector3(), scale: 0 };
+    });
+  }
+
+  registerPoints(HAND_POINTS); registerPoints(FACE_POINTS); registerPoints(BODY_POINTS);
+
+  const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 32, 32), new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3, metalness: 0.2 }));
+  ballMesh.scale.set(0, 0, 0);
+  scene.add(ballMesh);
+
+  const light = new THREE.DirectionalLight(0xffffff, 1.2); light.position.set(1, 2, 3); scene.add(light);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+  let ballScale = 0; const ballPos = new THREE.Vector3();
+
+  const handSkelGeom = new THREE.BufferGeometry(); handSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(HAND_CONNECTIONS.length * 6), 3));
+  const handSkelLines = new THREE.LineSegments(handSkelGeom, new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 }));
+  scene.add(handSkelLines);
+
+  const poseSkelGeom = new THREE.BufferGeometry(); poseSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(POSE_CONNECTIONS.length * 6), 3));
+  const poseSkelLines = new THREE.LineSegments(poseSkelGeom, new THREE.LineBasicMaterial({ color: 0x007aff, transparent: true, opacity: 0.8 }));
+  scene.add(poseSkelLines);
+
+  const faceSkelGeom = new THREE.BufferGeometry(); faceSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FACE_CONNECTIONS.length * 6), 3));
+  const faceSkelLines = new THREE.LineSegments(faceSkelGeom, new THREE.LineBasicMaterial({ color: 0xff4081, transparent: true, opacity: 0.8 }));
+  scene.add(faceSkelLines);
+
+  const handWorldPositions = new Array(21).fill(null).map(() => new THREE.Vector3());
+  const faceWorldPositions = new Array(478).fill(null).map(() => new THREE.Vector3());
+  const poseWorldPositions = new Array(33).fill(null).map(() => new THREE.Vector3());
+
+  let handVisible = false, faceVisible = false, poseVisible = false;
+
+  function buildUI() {
+    const createChip = (p, containerEl) => {
+      const chip = document.createElement('div');
+      chip.className = 'chip-item';
+      chip.innerHTML = `
+        <span class="chip-dot" style="background:${p.color}"></span>
+        <label class="sub-group"><input type="checkbox" class="show-chk" id="show-${p.id}" ${p.defaultShow ? 'checked' : ''} />${p.label}</label>
+        <label class="sub-group" style="margin-left:6px; border-left:1px solid #444; padding-left:6px;"><input type="checkbox" class="ball-checkbox" id="ball-${p.id}" ${p.id === currentBallTargetId ? 'checked' : ''} />Ball</label>
+      `;
+      containerEl.appendChild(chip);
+      chip.querySelector('.show-chk').addEventListener('change', (e) => trackers[p.id].enabled = e.target.checked);
+      chip.querySelector('.ball-checkbox').addEventListener('change', (e) => {
+        if (e.target.checked) setBallTarget(p.id);
+        else if (currentBallTargetId === p.id) e.target.checked = true;
       });
+    };
+    HAND_POINTS.forEach(p => createChip(p, document.getElementById('tab-hand')));
+    FACE_POINTS.forEach(p => createChip(p, document.getElementById('tab-face')));
+    BODY_POINTS.forEach(p => createChip(p, document.getElementById('tab-body')));
+  }
+
+  function setBallTarget(targetId) {
+    currentBallTargetId = targetId;
+    Object.keys(trackers).forEach(id => {
+      const chk = document.getElementById(`ball-${id}`);
+      if (chk) chk.checked = (id === targetId);
+    });
+  }
+
+  buildUI();
+
+  // FIX 1: Exact Aspect Ratio and Projection Alignment for Video Stream overlay
+  function mapToVisible(x, y) {
+    const videoAspect = video.videoWidth / video.videoHeight;
+    const screenAspect = window.innerWidth / window.innerHeight;
+    
+    let renderWidth = 1;
+    let renderHeight = 1;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (screenAspect > videoAspect) {
+      renderHeight = screenAspect / videoAspect;
+      offsetY = (renderHeight - 1) / 2;
+    } else {
+      renderWidth = videoAspect / screenAspect;
+      offsetX = (renderWidth - 1) / 2;
     }
 
-    registerPoints(HAND_POINTS); registerPoints(FACE_POINTS); registerPoints(BODY_POINTS);
+    return {
+      x: (x * renderWidth) - offsetX,
+      y: (y * renderHeight) - offsetY
+    };
+  }
 
-    const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 32, 32), new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3, metalness: 0.2 }));
-    ballMesh.scale.set(0, 0, 0);
-    scene.add(ballMesh);
+  function landmarkToWorld(landmark, outVec) {
+    const mapped = mapToVisible(landmark.x, landmark.y);
+    // Standard NDC unprojection conversion with correct Y orientation
+    _ndc.set(-(mapped.x * 2 - 1), -(mapped.y * 2 - 1), 0.5);
+    _ndc.unproject(camera);
+    _dir.copy(_ndc).sub(camera.position).normalize();
+    outVec.copy(camera.position).add(_dir.multiplyScalar(UNPROJECT_DISTANCE));
+    return outVec;
+  }
 
-    const light = new THREE.DirectionalLight(0xffffff, 1.2); light.position.set(1, 2, 3); scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  async function startApp() {
+    startBtn.style.display = 'none';
+    loadingModal.style.display = 'flex';
+    loadingText.innerText = "Accessing Camera...";
 
-    let ballScale = 0; const ballPos = new THREE.Vector3();
-
-    const handSkelGeom = new THREE.BufferGeometry(); handSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(HAND_CONNECTIONS.length * 6), 3));
-    const handSkelLines = new THREE.LineSegments(handSkelGeom, new THREE.LineBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.8 }));
-    scene.add(handSkelLines);
-
-    const poseSkelGeom = new THREE.BufferGeometry(); poseSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(POSE_CONNECTIONS.length * 6), 3));
-    const poseSkelLines = new THREE.LineSegments(poseSkelGeom, new THREE.LineBasicMaterial({ color: 0x007aff, transparent: true, opacity: 0.8 }));
-    scene.add(poseSkelLines);
-
-    const faceSkelGeom = new THREE.BufferGeometry(); faceSkelGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FACE_CONNECTIONS.length * 6), 3));
-    const faceSkelLines = new THREE.LineSegments(faceSkelGeom, new THREE.LineBasicMaterial({ color: 0xff4081, transparent: true, opacity: 0.8 }));
-    scene.add(faceSkelLines);
-
-    const handWorldPositions = new Array(21).fill(null).map(() => new THREE.Vector3());
-    const faceWorldPositions = new Array(478).fill(null).map(() => new THREE.Vector3());
-    const poseWorldPositions = new Array(33).fill(null).map(() => new THREE.Vector3());
-
-    let handVisible = false, faceVisible = false, poseVisible = false;
-
-    function buildUI() {
-      const createChip = (p, containerEl) => {
-        const chip = document.createElement('div');
-        chip.className = 'chip-item';
-        chip.innerHTML = `
-          <span class="chip-dot" style="background:${p.color}"></span>
-          <label class="sub-group"><input type="checkbox" class="show-chk" id="show-${p.id}" ${p.defaultShow ? 'checked' : ''} />${p.label}</label>
-          <label class="sub-group" style="margin-left:6px; border-left:1px solid #444; padding-left:6px;"><input type="checkbox" class="ball-checkbox" id="ball-${p.id}" ${p.id === currentBallTargetId ? 'checked' : ''} />Ball</label>
-        `;
-        containerEl.appendChild(chip);
-        chip.querySelector('.show-chk').addEventListener('change', (e) => trackers[p.id].enabled = e.target.checked);
-        chip.querySelector('.ball-checkbox').addEventListener('change', (e) => {
-          if (e.target.checked) setBallTarget(p.id);
-          else if (currentBallTargetId === p.id) e.target.checked = true;
-        });
-      };
-      HAND_POINTS.forEach(p => createChip(p, document.getElementById('tab-hand')));
-      FACE_POINTS.forEach(p => createChip(p, document.getElementById('tab-face')));
-      BODY_POINTS.forEach(p => createChip(p, document.getElementById('tab-body')));
-    }
-
-    function setBallTarget(targetId) {
-      currentBallTargetId = targetId;
-      Object.keys(trackers).forEach(id => {
-        const chk = document.getElementById(`ball-${id}`);
-        if (chk) chk.checked = (id === targetId);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
       });
+      video.srcObject = stream;
+      await video.play();
+
+      loadingText.innerText = "Loading MediaPipe WASM...";
+
+      const visionFiles = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
+      );
+
+      loadingText.innerText = "Loading Model Architecture...";
+
+      // FIX 2: Tuned Confidence Settings to prevent hand fallback drops
+      holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task",
+          delegate: "GPU"
+        },
+        runningMode: "VIDEO",
+        minFaceDetectionConfidence: 0.3,
+        minPoseDetectionConfidence: 0.3,
+        minHandLandmarksConfidence: 0.2
+      });
+
+      loadingModal.style.display = 'none';
+      statusText.innerText = "Status: Tracking Active";
+      detectIndicators.style.display = 'block';
+
+      render();
+
+    } catch (err) {
+      loadingModal.style.display = 'none';
+      statusText.innerText = "Error: " + err.message;
+      console.error(err);
     }
+  }
 
-    buildUI();
+  startBtn.addEventListener('click', startApp);
 
-    function mapToVisible(x, y) {
-      const videoAspect = video.videoWidth / video.videoHeight;
-      const screenAspect = window.innerWidth / window.innerHeight;
-      let visW = 1, visH = 1;
-      if (screenAspect > videoAspect) visH = videoAspect / screenAspect;
-      else visW = screenAspect / videoAspect;
-      const startX = (1 - visW) / 2;
-      const startY = (1 - visH) / 2;
-      return {
-        x: THREE.MathUtils.clamp((x - startX) / visW, 0, 1),
-        y: THREE.MathUtils.clamp((y - startY) / visH, 0, 1)
-      };
-    }
+  function render() {
+    requestAnimationFrame(render);
 
-    function landmarkToWorld(landmark, outVec) {
-      const mapped = mapToVisible(landmark.x, landmark.y);
-      _ndc.set(-(mapped.x * 2 - 1), -(mapped.y * 2 - 1), 0.5);
-      _ndc.unproject(camera);
-      _dir.copy(_ndc).sub(camera.position).normalize();
-      outVec.copy(camera.position).add(_dir.multiplyScalar(UNPROJECT_DISTANCE));
-      return outVec;
-    }
-
-    async function startApp() {
-      startBtn.style.display = 'none';
-      loadingModal.style.display = 'flex';
-      loadingText.innerText = "Accessing Camera...";
+    if (video.currentTime !== lastVideoTime && holisticLandmarker && video.videoWidth > 0) {
+      lastVideoTime = video.currentTime;
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        video.srcObject = stream;
-        await video.play();
+        const res = holisticLandmarker.detectForVideo(video, performance.now());
 
-        loadingText.innerText = "Loading MediaPipe WASM Module...";
-
-        const visionFiles = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
-        );
-
-        loadingText.innerText = "Loading Holistic Neural Network...";
-
-        holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
-          baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task",
-            delegate: "GPU"
-          },
-          runningMode: "VIDEO",
-          minFaceDetectionConfidence: 0.5,
-          minPoseDetectionConfidence: 0.5,
-          minHandLandmarksConfidence: 0.5
-        });
-
-        loadingModal.style.display = 'none';
-        statusText.innerText = "Status: Tracking Active";
-        detectIndicators.style.display = 'block';
-
-        render();
-
-      } catch (err) {
-        loadingModal.style.display = 'none';
-        statusText.innerText = "Error: " + err.message;
-        console.error(err);
-      }
-    }
-
-    startBtn.addEventListener('click', startApp);
-
-    function render() {
-      requestAnimationFrame(render);
-
-      if (video.currentTime !== lastVideoTime && holisticLandmarker && video.videoWidth > 0) {
-        lastVideoTime = video.currentTime;
-
-        try {
-          const res = holisticLandmarker.detectForVideo(video, performance.now());
-
-          const handLandmarks = res.rightHandLandmarks?.length ? res.rightHandLandmarks : res.leftHandLandmarks;
-          if (handLandmarks && handLandmarks.length > 0) {
-            handVisible = true;
-            for (let i = 0; i < handLandmarks.length; i++) landmarkToWorld(handLandmarks[i], handWorldPositions[i]);
-          } else handVisible = false;
-
-          if (res.faceLandmarks && res.faceLandmarks.length > 0) {
-            faceVisible = true;
-            const facePoints = res.faceLandmarks[0];
-            for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
-          } else faceVisible = false;
-
-          if (res.poseLandmarks && res.poseLandmarks.length > 0) {
-            poseVisible = true;
-            const bodyPoints = res.poseLandmarks[0] ? res.poseLandmarks[0] : res.poseLandmarks;
-            for (let i = 0; i < bodyPoints.length; i++) landmarkToWorld(bodyPoints[i], poseWorldPositions[i]);
-          } else poseVisible = false;
-
-          badgeHand.className = "detect-badge " + (handVisible ? "badge-on" : "badge-off");
-          badgeFace.className = "detect-badge " + (faceVisible ? "badge-on" : "badge-off");
-          badgePose.className = "detect-badge " + (poseVisible ? "badge-on" : "badge-off");
-
-          Object.values(trackers).forEach(t => {
-            let isVis = false, srcArr = null;
-            if (t.category === 'hand' && handVisible) { isVis = true; srcArr = handWorldPositions; }
-            else if (t.category === 'face' && faceVisible) { isVis = true; srcArr = faceWorldPositions; }
-            else if (t.category === 'pose' && poseVisible) { isVis = true; srcArr = poseWorldPositions; }
-
-            if (isVis && srcArr) {
-              t.active = true;
-              if (t.landmark === 'palm') {
-                const avg = t.targetPos.set(0, 0, 0);
-                PALM_LANDMARKS.forEach(idx => avg.add(handWorldPositions[idx]));
-                avg.multiplyScalar(1 / PALM_LANDMARKS.length);
-              } else if (srcArr[t.landmark]) {
-                t.targetPos.copy(srcArr[t.landmark]);
-              }
-            } else t.active = false;
-          });
-
-          if (handVisible) {
-            const thumbNorm = handLandmarks[4];
-            const indexNorm = handLandmarks[8];
-            const dist2D = Math.hypot(thumbNorm.x - indexNorm.x, thumbNorm.y - indexNorm.y);
-
-            if (dist2D < 0.065 && currentBallTargetId !== 'index') {
-              setBallTarget('index');
-            }
-          }
-
-          const currentHolder = trackers[currentBallTargetId];
-          if (currentHolder && currentHolder.active) {
-            Object.values(trackers).forEach(other => {
-              if (other.id !== currentBallTargetId && other.active) {
-                if (currentHolder.targetPos.distanceTo(other.targetPos) < PROXIMITY_TRANSFER_THRESHOLD) {
-                  setBallTarget(other.id);
-                }
-              }
-            });
-          }
-
-        } catch(e) {
-          console.warn("Detection skipped frame:", e);
+        // Hand landmark detection checking both left and right hands cleanly
+        let handLandmarks = null;
+        if (res.rightHandLandmarks && res.rightHandLandmarks.length > 0) {
+          handLandmarks = res.rightHandLandmarks;
+        } else if (res.leftHandLandmarks && res.leftHandLandmarks.length > 0) {
+          handLandmarks = res.leftHandLandmarks;
         }
-      }
 
-      Object.values(trackers).forEach(t => {
-        if (t.enabled && t.active) {
-          t.currentPos.lerp(t.targetPos, LERP_FACTOR);
-          t.mesh.position.copy(t.currentPos);
-          if (t.scale < TARGET_SCALE) t.scale = Math.min(TARGET_SCALE, t.scale + SCALE_SPEED);
+        if (handLandmarks && handLandmarks.length === 21) {
+          handVisible = true;
+          for (let i = 0; i < 21; i++) {
+            landmarkToWorld(handLandmarks[i], handWorldPositions[i]);
+          }
         } else {
-          if (t.scale > 0) t.scale = Math.max(0, t.scale - SCALE_SPEED);
+          handVisible = false;
         }
-        t.mesh.scale.set(t.scale, t.scale, t.scale);
-        if (t.scale > 0) { t.mesh.rotation.x += 0.02; t.mesh.rotation.y += 0.02; }
-      });
 
-      const activeBallHolder = trackers[currentBallTargetId];
-      if (activeBallHolder && activeBallHolder.active) {
-        ballPos.lerp(activeBallHolder.targetPos, 0.35);
-        ballMesh.position.copy(ballPos);
-        if (ballScale < 1) ballScale = Math.min(1, ballScale + 0.1);
-      } else {
-        if (ballScale > 0) ballScale = Math.max(0, ballScale - 0.1);
-      }
-      ballMesh.scale.set(ballScale, ballScale, ballScale);
+        if (res.faceLandmarks && res.faceLandmarks.length > 0) {
+          faceVisible = true;
+          const facePoints = res.faceLandmarks[0];
+          for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
+        } else faceVisible = false;
 
-      const handSkelChk = document.getElementById('toggle-hand-skel');
-      if (handSkelChk && handSkelChk.checked && handVisible) {
-        const posAttr = handSkelGeom.getAttribute('position');
-        HAND_CONNECTIONS.forEach(([a, b], i) => {
-          posAttr.setXYZ(i * 2, handWorldPositions[a].x, handWorldPositions[a].y, handWorldPositions[a].z);
-          posAttr.setXYZ(i * 2 + 1, handWorldPositions[b].x, handWorldPositions[b].y, handWorldPositions[b].z);
+        if (res.poseLandmarks && res.poseLandmarks.length > 0) {
+          poseVisible = true;
+          const bodyPoints = res.poseLandmarks[0] ? res.poseLandmarks[0] : res.poseLandmarks;
+          for (let i = 0; i < bodyPoints.length; i++) landmarkToWorld(bodyPoints[i], poseWorldPositions[i]);
+        } else poseVisible = false;
+
+        badgeHand.className = "detect-badge " + (handVisible ? "badge-on" : "badge-off");
+        badgeFace.className = "detect-badge " + (faceVisible ? "badge-on" : "badge-off");
+        badgePose.className = "detect-badge " + (poseVisible ? "badge-on" : "badge-off");
+
+        Object.values(trackers).forEach(t => {
+          let isVis = false, srcArr = null;
+          if (t.category === 'hand' && handVisible) { isVis = true; srcArr = handWorldPositions; }
+          else if (t.category === 'face' && faceVisible) { isVis = true; srcArr = faceWorldPositions; }
+          else if (t.category === 'pose' && poseVisible) { isVis = true; srcArr = poseWorldPositions; }
+
+          if (isVis && srcArr) {
+            t.active = true;
+            if (t.landmark === 'palm') {
+              const avg = t.targetPos.set(0, 0, 0);
+              PALM_LANDMARKS.forEach(idx => avg.add(handWorldPositions[idx]));
+              avg.multiplyScalar(1 / PALM_LANDMARKS.length);
+            } else if (srcArr[t.landmark]) {
+              t.targetPos.copy(srcArr[t.landmark]);
+            }
+          } else t.active = false;
         });
-        posAttr.needsUpdate = true;
-        handSkelLines.visible = true;
-      } else handSkelLines.visible = false;
 
-      const poseSkelChk = document.getElementById('toggle-pose-skel');
-      if (poseSkelChk && poseSkelChk.checked && poseVisible) {
-        const posAttr = poseSkelGeom.getAttribute('position');
-        POSE_CONNECTIONS.forEach(([a, b], i) => {
-          posAttr.setXYZ(i * 2, poseWorldPositions[a].x, poseWorldPositions[a].y, poseWorldPositions[a].z);
-          posAttr.setXYZ(i * 2 + 1, poseWorldPositions[b].x, poseWorldPositions[b].y, poseWorldPositions[b].z);
-        });
-        posAttr.needsUpdate = true;
-        poseSkelLines.visible = true;
-      } else poseSkelLines.visible = false;
+        if (handVisible && handLandmarks) {
+          const thumbNorm = handLandmarks[4];
+          const indexNorm = handLandmarks[8];
+          const dist2D = Math.hypot(thumbNorm.x - indexNorm.x, thumbNorm.y - indexNorm.y);
 
-      const faceSkelChk = document.getElementById('toggle-face-skel');
-      if (faceSkelChk && faceSkelChk.checked && faceVisible) {
-        const posAttr = faceSkelGeom.getAttribute('position');
-        FACE_CONNECTIONS.forEach(([a, b], i) => {
-          if (faceWorldPositions[a] && faceWorldPositions[b]) {
-            posAttr.setXYZ(i * 2, faceWorldPositions[a].x, faceWorldPositions[a].y, faceWorldPositions[a].z);
-            posAttr.setXYZ(i * 2 + 1, faceWorldPositions[b].x, faceWorldPositions[b].y, faceWorldPositions[b].z);
+          if (dist2D < 0.065 && currentBallTargetId !== 'index') {
+            setBallTarget('index');
           }
-        });
-        posAttr.needsUpdate = true;
-        faceSkelLines.visible = true;
-      } else faceSkelLines.visible = false;
+        }
 
-      renderer.render(scene, camera);
+        const currentHolder = trackers[currentBallTargetId];
+        if (currentHolder && currentHolder.active) {
+          Object.values(trackers).forEach(other => {
+            if (other.id !== currentBallTargetId && other.active) {
+              if (currentHolder.targetPos.distanceTo(other.targetPos) < PROXIMITY_TRANSFER_THRESHOLD) {
+                setBallTarget(other.id);
+              }
+            }
+          });
+        }
+
+      } catch(e) {
+        console.warn("Detection skipped frame:", e);
+      }
     }
 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    Object.values(trackers).forEach(t => {
+      if (t.enabled && t.active) {
+        t.currentPos.lerp(t.targetPos, LERP_FACTOR);
+        t.mesh.position.copy(t.currentPos);
+        if (t.scale < TARGET_SCALE) t.scale = Math.min(TARGET_SCALE, t.scale + SCALE_SPEED);
+      } else {
+        if (t.scale > 0) t.scale = Math.max(0, t.scale - SCALE_SPEED);
+      }
+      t.mesh.scale.set(t.scale, t.scale, t.scale);
+      if (t.scale > 0) { t.mesh.rotation.x += 0.02; t.mesh.rotation.y += 0.02; }
     });
-  </script>
-</body>
-</html>
+
+    const activeBallHolder = trackers[currentBallTargetId];
+    if (activeBallHolder && activeBallHolder.active) {
+      ballPos.lerp(activeBallHolder.targetPos, 0.35);
+      ballMesh.position.copy(ballPos);
+      if (ballScale < 1) ballScale = Math.min(1, ballScale + 0.1);
+    } else {
+      if (ballScale > 0) ballScale = Math.max(0, ballScale - 0.1);
+    }
+    ballMesh.scale.set(ballScale, ballScale, ballScale);
+
+    const handSkelChk = document.getElementById('toggle-hand-skel');
+    if (handSkelChk && handSkelChk.checked && handVisible) {
+      const posAttr = handSkelGeom.getAttribute('position');
+      HAND_CONNECTIONS.forEach(([a, b], i) => {
+        posAttr.setXYZ(i * 2, handWorldPositions[a].x, handWorldPositions[a].y, handWorldPositions[a].z);
+        posAttr.setXYZ(i * 2 + 1, handWorldPositions[b].x, handWorldPositions[b].y, handWorldPositions[b].z);
+      });
+      posAttr.needsUpdate = true;
+      handSkelLines.visible = true;
+    } else handSkelLines.visible = false;
+
+    const poseSkelChk = document.getElementById('toggle-pose-skel');
+    if (poseSkelChk && poseSkelChk.checked && poseVisible) {
+      const posAttr = poseSkelGeom.getAttribute('position');
+      POSE_CONNECTIONS.forEach(([a, b], i) => {
+        posAttr.setXYZ(i * 2, poseWorldPositions[a].x, poseWorldPositions[a].y, poseWorldPositions[a].z);
+        posAttr.setXYZ(i * 2 + 1, poseWorldPositions[b].x, poseWorldPositions[b].y, poseWorldPositions[b].z);
+      });
+      posAttr.needsUpdate = true;
+      poseSkelLines.visible = true;
+    } else poseSkelLines.visible = false;
+
+    const faceSkelChk = document.getElementById('toggle-face-skel');
+    if (faceSkelChk && faceSkelChk.checked && faceVisible) {
+      const posAttr = faceSkelGeom.getAttribute('position');
+      FACE_CONNECTIONS.forEach(([a, b], i) => {
+        if (faceWorldPositions[a] && faceWorldPositions[b]) {
+          posAttr.setXYZ(i * 2, faceWorldPositions[a].x, faceWorldPositions[a].y, faceWorldPositions[a].z);
+          posAttr.setXYZ(i * 2 + 1, faceWorldPositions[b].x, faceWorldPositions[b].y, faceWorldPositions[b].z);
+        }
+      });
+      posAttr.needsUpdate = true;
+      faceSkelLines.visible = true;
+    } else faceSkelLines.visible = false;
+
+    renderer.render(scene, camera);
+  }
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
