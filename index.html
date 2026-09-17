@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Dual-Engine Tracking + Alignment Fix</title>
+  <title>3D Dual-Engine Tracking (Offline-Ready)</title>
   <style>
     body {
       margin: 0;
@@ -25,7 +25,7 @@
       pointer-events: none;
     }
 
-    /* Status & Controls */
+    /* Overlay Styles */
     #status-overlay {
       position: absolute;
       top: 16px; left: 16px;
@@ -71,7 +71,15 @@
     .badge-on { background: #34c759; color: #000; }
     .badge-off { background: rgba(255,255,255,0.15); color: #888; }
 
-    /* Loading Modal */
+    #offline-tag {
+      margin-top: 6px;
+      font-size: 10px;
+      color: #34c759;
+      font-weight: bold;
+      display: none;
+    }
+
+    /* Modal */
     #loading-modal {
       position: absolute;
       top: 0; left: 0; width: 100vw; height: 100vh;
@@ -148,7 +156,7 @@
 
   <div id="loading-modal">
     <div class="spinner"></div>
-    <div id="loading-text">Initializing Tracking Model...</div>
+    <div id="loading-text">Loading Model...</div>
   </div>
 
   <div id="status-overlay">
@@ -158,6 +166,7 @@
     </select>
     <button id="start-btn">Start Tracking Engine</button>
     <div id="status-text" style="margin-top:8px; font-weight: 500;">Status: Ready</div>
+    <div id="offline-tag">✓ OFFLINE READY (Cached)</div>
     <div id="detection-indicators" style="margin-top:8px; display:none;">
       Active Tracking:
       <div style="margin-top: 4px;">
@@ -201,6 +210,18 @@
     FaceLandmarker,
     FilesetResolver
   } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+
+  // Service Worker Registration for Offline Play
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then((reg) => {
+          console.log('[SW] Service Worker Registered Successfully:', reg.scope);
+          document.getElementById('offline-tag').style.display = 'block';
+        })
+        .catch((err) => console.error('[SW] Registration Failed:', err));
+    });
+  }
 
   const video = document.getElementById('webcam');
   const startBtn = document.getElementById('start-btn');
@@ -372,7 +393,6 @@
 
   buildUI();
 
-  // Corrected mapping method that accounts for aspect ratio clipping (object-fit: cover)
   function mapToVisible(x, y) {
     if (!video.videoWidth || !video.videoHeight) return { x, y };
     const screenAspect = window.innerWidth / window.innerHeight;
@@ -382,11 +402,9 @@
     let normY = y;
 
     if (screenAspect < videoAspect) {
-      // Cover mode clips the sides of the video
       const scale = screenAspect / videoAspect;
       normX = (x - 0.5) / scale + 0.5;
     } else {
-      // Cover mode clips the top and bottom of the video
       const scale = videoAspect / screenAspect;
       normY = (y - 0.5) / scale + 0.5;
     }
