@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>3D Holistic Ball Tracking + Diagnostics</title>
+  <title>3D Dual-Engine Tracking + Alignment Fix</title>
   <style>
     body {
       margin: 0;
@@ -25,7 +25,7 @@
       pointer-events: none;
     }
 
-    /* Diagnostics Bar */
+    /* Status & Controls */
     #status-overlay {
       position: absolute;
       top: 16px; left: 16px;
@@ -38,6 +38,16 @@
       max-width: 320px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       border: 1px solid rgba(255,255,255,0.15);
+    }
+    .engine-select {
+      width: 100%;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.3);
+      padding: 6px 8px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
     }
     #start-btn {
       background: #007aff;
@@ -57,12 +67,11 @@
       font-size: 10px;
       font-weight: bold;
       margin-right: 4px;
-      transition: background 0.2s;
     }
     .badge-on { background: #34c759; color: #000; }
     .badge-off { background: rgba(255,255,255,0.15); color: #888; }
 
-    /* Loading Screen */
+    /* Loading Modal */
     #loading-modal {
       position: absolute;
       top: 0; left: 0; width: 100vw; height: 100vh;
@@ -102,7 +111,6 @@
       cursor: pointer;
       backdrop-filter: blur(8px);
     }
-
     #control-drawer {
       position: absolute;
       bottom: 0; left: 0; width: 100%;
@@ -119,14 +127,11 @@
       max-height: 48vh;
     }
     #control-drawer.open { transform: translateY(0); }
-
     .tab-bar { display: flex; gap: 6px; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 8px; }
     .tab-btn { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #aaa; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; }
     .tab-btn.active { background: #007aff; color: #fff; border-color: #007aff; }
-
     .tab-content { display: none; overflow-y: auto; max-height: 32vh; }
     .tab-content.active { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-
     .chip-item { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); padding: 6px 10px; border-radius: 12px; }
     .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
     .sub-group { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ddd; }
@@ -143,10 +148,14 @@
 
   <div id="loading-modal">
     <div class="spinner"></div>
-    <div id="loading-text">Downloading ML Models...</div>
+    <div id="loading-text">Initializing Tracking Model...</div>
   </div>
 
   <div id="status-overlay">
+    <select id="engine-mode" class="engine-select">
+      <option value="precision">Mode: Precision (Hand & Face)</option>
+      <option value="holistic">Mode: Full Body (Holistic)</option>
+    </select>
     <button id="start-btn">Start Tracking Engine</button>
     <div id="status-text" style="margin-top:8px; font-weight: 500;">Status: Ready</div>
     <div id="detection-indicators" style="margin-top:8px; display:none;">
@@ -175,7 +184,7 @@
     </div>
     <div class="tab-content" id="tab-face">
       <div class="chip-item">
-        <label class="sub-group"><input type="checkbox" id="toggle-face-skel" checked /> Face Skeleton Mesh</label>
+        <label class="sub-group"><input type="checkbox" id="toggle-face-skel" checked /> Face Mesh</label>
       </div>
     </div>
     <div class="tab-content" id="tab-body">
@@ -186,18 +195,16 @@
   </div>
 
   <script type="module">
-  import { HolisticLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js')
-        .then(reg => console.log('SW Registered:', reg))
-        .catch(err => console.error('SW Error:', err));
-    });
-  }
+  import {
+    HolisticLandmarker,
+    HandLandmarker,
+    FaceLandmarker,
+    FilesetResolver
+  } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
   const video = document.getElementById('webcam');
   const startBtn = document.getElementById('start-btn');
+  const engineSelect = document.getElementById('engine-mode');
   const statusText = document.getElementById('status-text');
   const container = document.getElementById('canvas-container');
   const drawer = document.getElementById('control-drawer');
@@ -259,7 +266,6 @@
   const PALM_LANDMARKS = [0, 5, 9, 13, 17];
   const HAND_CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
   const POSE_CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[24,26],[25,27],[26,28]];
-
   const FACE_CONNECTIONS = [
     [61,146],[146,91],[91,181],[181,84],[84,17],[17,314],[314,405],[405,321],[321,375],[375,291],
     [61,185],[185,40],[40,39],[39,37],[37,0],[0,267],[267,269],[269,270],[270,409],[409,291],
@@ -273,8 +279,11 @@
   const PROXIMITY_TRANSFER_THRESHOLD = 0.18;
 
   let holisticLandmarker = null;
-  let lastVideoTime = -1;
+  let handLandmarker = null;
+  let faceLandmarker = null;
+  let activeEngine = 'precision';
 
+  let lastVideoTime = -1;
   const LERP_FACTOR = 0.35;
   const TARGET_SCALE = 0.12;
   const SCALE_SPEED = 0.08;
@@ -363,28 +372,26 @@
 
   buildUI();
 
+  // Corrected mapping method that accounts for aspect ratio clipping (object-fit: cover)
   function mapToVisible(x, y) {
     if (!video.videoWidth || !video.videoHeight) return { x, y };
-    const videoAspect = video.videoWidth / video.videoHeight;
     const screenAspect = window.innerWidth / window.innerHeight;
+    const videoAspect = video.videoWidth / video.videoHeight;
     
-    let renderWidth = 1;
-    let renderHeight = 1;
-    let offsetX = 0;
-    let offsetY = 0;
+    let normX = x;
+    let normY = y;
 
-    if (screenAspect > videoAspect) {
-      renderHeight = screenAspect / videoAspect;
-      offsetY = (renderHeight - 1) / 2;
+    if (screenAspect < videoAspect) {
+      // Cover mode clips the sides of the video
+      const scale = screenAspect / videoAspect;
+      normX = (x - 0.5) / scale + 0.5;
     } else {
-      renderWidth = videoAspect / screenAspect;
-      offsetX = (renderWidth - 1) / 2;
+      // Cover mode clips the top and bottom of the video
+      const scale = videoAspect / screenAspect;
+      normY = (y - 0.5) / scale + 0.5;
     }
 
-    return {
-      x: (x * renderWidth) - offsetX,
-      y: (y * renderHeight) - offsetY
-    };
+    return { x: normX, y: normY };
   }
 
   function landmarkToWorld(landmark, outVec) {
@@ -397,38 +404,47 @@
   }
 
   async function startApp() {
+    activeEngine = engineSelect.value;
     startBtn.style.display = 'none';
+    engineSelect.disabled = true;
     loadingModal.style.display = 'flex';
     loadingText.innerText = "Accessing Camera...";
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
-      });
-      video.srcObject = stream;
-      await video.play();
+      if (!video.srcObject) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        video.srcObject = stream;
+        await video.play();
+      }
 
-      loadingText.innerText = "Loading MediaPipe WASM...";
+      loadingText.innerText = "Loading Vision Engine...";
 
       const visionFiles = await FilesetResolver.forVisionTasks(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
       );
 
-      loadingText.innerText = "Loading Model Architecture...";
-
-      holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task",
-          delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        minFaceDetectionConfidence: 0.3,
-        minPoseDetectionConfidence: 0.3,
-        minHandLandmarksConfidence: 0.2
-      });
+      if (activeEngine === 'precision') {
+        loadingText.innerText = "Loading Precision Models...";
+        handLandmarker = await HandLandmarker.createFromOptions(visionFiles, {
+          baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate: "GPU" },
+          runningMode: "VIDEO", numHands: 2
+        });
+        faceLandmarker = await FaceLandmarker.createFromOptions(visionFiles, {
+          baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task", delegate: "GPU" },
+          runningMode: "VIDEO", numFaces: 1
+        });
+      } else {
+        loadingText.innerText = "Loading Full Body Model...";
+        holisticLandmarker = await HolisticLandmarker.createFromOptions(visionFiles, {
+          baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task", delegate: "GPU" },
+          runningMode: "VIDEO"
+        });
+      }
 
       loadingModal.style.display = 'none';
-      statusText.innerText = "Status: Tracking Active";
+      statusText.innerText = `Tracking Active (${activeEngine.toUpperCase()})`;
       detectIndicators.style.display = 'block';
 
       render();
@@ -436,6 +452,7 @@
     } catch (err) {
       loadingModal.style.display = 'none';
       startBtn.style.display = 'block';
+      engineSelect.disabled = false;
       statusText.innerText = "Error: " + err.message;
       console.error(err);
     }
@@ -443,42 +460,62 @@
 
   startBtn.addEventListener('click', startApp);
 
+  function processPrecisionFrame(now) {
+    const handRes = handLandmarker.detectForVideo(video, now);
+    if (handRes.landmarks && handRes.landmarks.length > 0) {
+      handVisible = true;
+      const handPoints = handRes.landmarks[0];
+      for (let i = 0; i < 21; i++) landmarkToWorld(handPoints[i], handWorldPositions[i]);
+    } else handVisible = false;
+
+    const faceRes = faceLandmarker.detectForVideo(video, now);
+    if (faceRes.faceLandmarks && faceRes.faceLandmarks.length > 0) {
+      faceVisible = true;
+      const facePoints = faceRes.faceLandmarks[0];
+      for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
+    } else faceVisible = false;
+
+    poseVisible = false;
+  }
+
+  function processHolisticFrame(now) {
+    const res = holisticLandmarker.detectForVideo(video, now);
+
+    let handLandmarks = null;
+    if (res.rightHandLandmarks && res.rightHandLandmarks.length > 0) handLandmarks = res.rightHandLandmarks[0] || res.rightHandLandmarks;
+    else if (res.leftHandLandmarks && res.leftHandLandmarks.length > 0) handLandmarks = res.leftHandLandmarks[0] || res.leftHandLandmarks;
+
+    if (handLandmarks && handLandmarks.length === 21) {
+      handVisible = true;
+      for (let i = 0; i < 21; i++) landmarkToWorld(handLandmarks[i], handWorldPositions[i]);
+    } else handVisible = false;
+
+    if (res.faceLandmarks && res.faceLandmarks.length > 0) {
+      faceVisible = true;
+      const facePoints = res.faceLandmarks[0] || res.faceLandmarks;
+      for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
+    } else faceVisible = false;
+
+    if (res.poseLandmarks && res.poseLandmarks.length > 0) {
+      poseVisible = true;
+      const bodyPoints = res.poseLandmarks[0] || res.poseLandmarks;
+      for (let i = 0; i < bodyPoints.length; i++) landmarkToWorld(bodyPoints[i], poseWorldPositions[i]);
+    } else poseVisible = false;
+  }
+
   function render() {
     requestAnimationFrame(render);
 
-    if (video.currentTime !== lastVideoTime && holisticLandmarker && video.videoWidth > 0) {
+    if (video.currentTime !== lastVideoTime && video.videoWidth > 0) {
       lastVideoTime = video.currentTime;
+      const now = performance.now();
 
       try {
-        const res = holisticLandmarker.detectForVideo(video, performance.now());
-
-        let handLandmarks = null;
-        if (res.rightHandLandmarks && res.rightHandLandmarks.length > 0) {
-          handLandmarks = res.rightHandLandmarks[0] || res.rightHandLandmarks;
-        } else if (res.leftHandLandmarks && res.leftHandLandmarks.length > 0) {
-          handLandmarks = res.leftHandLandmarks[0] || res.leftHandLandmarks;
+        if (activeEngine === 'precision' && handLandmarker && faceLandmarker) {
+          processPrecisionFrame(now);
+        } else if (activeEngine === 'holistic' && holisticLandmarker) {
+          processHolisticFrame(now);
         }
-
-        if (handLandmarks && handLandmarks.length === 21) {
-          handVisible = true;
-          for (let i = 0; i < 21; i++) {
-            landmarkToWorld(handLandmarks[i], handWorldPositions[i]);
-          }
-        } else {
-          handVisible = false;
-        }
-
-        if (res.faceLandmarks && res.faceLandmarks.length > 0) {
-          faceVisible = true;
-          const facePoints = res.faceLandmarks[0] || res.faceLandmarks;
-          for (let i = 0; i < facePoints.length; i++) landmarkToWorld(facePoints[i], faceWorldPositions[i]);
-        } else faceVisible = false;
-
-        if (res.poseLandmarks && res.poseLandmarks.length > 0) {
-          poseVisible = true;
-          const bodyPoints = res.poseLandmarks[0] || res.poseLandmarks;
-          for (let i = 0; i < bodyPoints.length; i++) landmarkToWorld(bodyPoints[i], poseWorldPositions[i]);
-        } else poseVisible = false;
 
         badgeHand.className = "detect-badge " + (handVisible ? "badge-on" : "badge-off");
         badgeFace.className = "detect-badge " + (faceVisible ? "badge-on" : "badge-off");
@@ -502,16 +539,6 @@
           } else t.active = false;
         });
 
-        if (handVisible && handLandmarks) {
-          const thumbNorm = handLandmarks[4];
-          const indexNorm = handLandmarks[8];
-          const dist2D = Math.hypot(thumbNorm.x - indexNorm.x, thumbNorm.y - indexNorm.y);
-
-          if (dist2D < 0.065 && currentBallTargetId !== 'index') {
-            setBallTarget('index');
-          }
-        }
-
         const currentHolder = trackers[currentBallTargetId];
         if (currentHolder && currentHolder.active) {
           Object.values(trackers).forEach(other => {
@@ -524,7 +551,7 @@
         }
 
       } catch(e) {
-        console.warn("Detection skipped frame:", e);
+        console.warn("Frame detection issue:", e);
       }
     }
 
