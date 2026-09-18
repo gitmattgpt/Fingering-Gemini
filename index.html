@@ -1,140 +1,57 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, user-scalable=no"
-  />
-
-  <title>3D Dual-Engine Tracking - Adjustable Alignment</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>3D Dual-Engine Tracking - Pinch & Butterfly AR</title>
   <style>
-    :root {
-      --blue: #007aff;
-      --green: #34c759;
-      --orange: #ff9500;
-      --panel: rgba(0, 0, 0, 0.86);
-      --border: rgba(255, 255, 255, 0.18);
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
       overflow: hidden;
       background: #111;
-      color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
-
     #webcam {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
       object-fit: cover;
       transform: scaleX(-1);
-      background: #111;
     }
-
     #canvas-container {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      pointer-events: none;
-    }
-
-    #canvas-container canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    /* Top controls */
-
-    #top-controls {
       position: absolute;
-      top: calc(16px + env(safe-area-inset-top));
-      left: 16px;
-      right: 16px;
-      z-index: 30;
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
       pointer-events: none;
     }
 
-    #status-overlay,
-    #alignment-panel {
-      pointer-events: auto;
-      color: #fff;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px 16px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(12px);
-    }
-
+    /* Overlay Styles */
     #status-overlay {
-      width: 320px;
-      max-width: 42vw;
-      font-size: 12px;
-    }
-
-    #alignment-panel {
-      width: 320px;
-      max-width: 42vw;
-      font-size: 12px;
-    }
-
-    #status-overlay.hidden,
-    #alignment-panel.hidden {
-      display: none;
-    }
-
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-      font-weight: 700;
-      font-size: 13px;
-    }
-
-    .hide-panel-btn {
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      background: rgba(255, 255, 255, 0.1);
+      position: absolute;
+      top: 16px; left: 16px;
       color: #fff;
-      border-radius: 6px;
-      padding: 4px 7px;
-      font-size: 11px;
-      cursor: pointer;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 12px 16px;
+      border-radius: 12px;
+      z-index: 10;
+      font-size: 12px;
+      max-width: 320px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.15);
     }
-
     .engine-select {
       width: 100%;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255,255,255,0.1);
       color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      padding: 7px 8px;
+      border: 1px solid rgba(255,255,255,0.3);
+      padding: 6px 8px;
       border-radius: 6px;
       margin-bottom: 8px;
       font-size: 12px;
     }
-
-    .engine-select option {
-      color: #000;
-    }
-
-    #start-btn,
-    .primary-btn {
-      background: var(--blue);
+    #start-btn {
+      background: #007aff;
       color: #fff;
       border: none;
       padding: 10px 16px;
@@ -144,30 +61,28 @@
       cursor: pointer;
       width: 100%;
     }
-
-    #start-btn:disabled {
-      opacity: 0.6;
-      cursor: default;
+    .detect-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: bold;
+      margin-right: 4px;
     }
-
-    #status-text {
-      margin-top: 8px;
-      font-weight: 500;
-      line-height: 1.35;
-    }
+    .badge-on { background: #34c759; color: #000; }
+    .badge-off { background: rgba(255,255,255,0.15); color: #888; }
 
     #offline-tag {
       margin-top: 6px;
       font-size: 10px;
-      color: var(--green);
+      color: #34c759;
       font-weight: bold;
       display: none;
     }
-
     #pinch-badge {
       margin-top: 6px;
       padding: 4px 8px;
-      background: var(--orange);
+      background: #ff9500;
       color: #000;
       border-radius: 6px;
       font-weight: bold;
@@ -176,145 +91,11 @@
       visibility: hidden;
     }
 
-    .detect-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 10px;
-      font-weight: bold;
-      margin-right: 4px;
-      margin-top: 4px;
-    }
-
-    .badge-on {
-      background: var(--green);
-      color: #000;
-    }
-
-    .badge-off {
-      background: rgba(255, 255, 255, 0.15);
-      color: #888;
-    }
-
-    /* Alignment controls */
-
-    .alignment-description {
-      color: #aaa;
-      font-size: 11px;
-      line-height: 1.35;
-      margin-bottom: 12px;
-    }
-
-    .alignment-row {
-      margin-bottom: 12px;
-    }
-
-    .alignment-label {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 5px;
-      font-weight: 600;
-    }
-
-    .alignment-value {
-      color: #4dd0e1;
-      font-variant-numeric: tabular-nums;
-      min-width: 55px;
-      text-align: right;
-    }
-
-    .slider-line {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-    }
-
-    .alignment-slider {
-      flex: 1;
-      min-width: 0;
-      accent-color: var(--blue);
-      cursor: pointer;
-    }
-
-    .number-input {
-      width: 64px;
-      padding: 5px 5px;
-      color: #fff;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      border-radius: 5px;
-      font-size: 11px;
-    }
-
-    .number-input:focus {
-      outline: 1px solid var(--blue);
-    }
-
-    .range-caption {
-      display: flex;
-      justify-content: space-between;
-      color: #888;
-      font-size: 10px;
-      margin-top: 3px;
-    }
-
-    .alignment-buttons {
-      display: flex;
-      gap: 8px;
-      margin-top: 4px;
-    }
-
-    .alignment-buttons button {
-      flex: 1;
-      padding: 7px 8px;
-      border-radius: 7px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      color: #fff;
-      background: rgba(255, 255, 255, 0.1);
-      cursor: pointer;
-      font-size: 11px;
-    }
-
-    .alignment-buttons button:hover,
-    .hide-panel-btn:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    /* Show/hide buttons */
-
-    #panel-toggle-controls {
-      position: absolute;
-      top: calc(16px + env(safe-area-inset-top));
-      left: 16px;
-      z-index: 40;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    #panel-toggle-controls button {
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      background: rgba(0, 0, 0, 0.7);
-      color: #fff;
-      padding: 7px 9px;
-      border-radius: 7px;
-      cursor: pointer;
-      font-size: 11px;
-      backdrop-filter: blur(8px);
-    }
-
-    #panel-toggle-controls button:hover {
-      background: rgba(0, 122, 255, 0.8);
-    }
-
-    /* Loading modal */
-
+    /* Modal */
     #loading-modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.9);
+      position: absolute;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.9);
       display: none;
       flex-direction: column;
       justify-content: center;
@@ -322,31 +103,23 @@
       z-index: 100;
       color: #fff;
     }
-
     .spinner {
-      width: 44px;
-      height: 44px;
+      width: 44px; height: 44px;
       border: 4px solid rgba(255, 255, 255, 0.1);
-      border-left-color: var(--blue);
+      border-left-color: #007aff;
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin-bottom: 16px;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    /* Bottom menu */
-
+    /* Drawer UI */
     #menu-toggle-btn {
       position: absolute;
       bottom: calc(16px + env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
-      z-index: 40;
+      z-index: 20;
       background: rgba(0, 122, 255, 0.9);
       color: #fff;
       border: none;
@@ -354,17 +127,14 @@
       border-radius: 999px;
       font-size: 14px;
       font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
       cursor: pointer;
       backdrop-filter: blur(8px);
     }
-
     #control-drawer {
       position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      z-index: 35;
+      bottom: 0; left: 0; width: 100%;
+      z-index: 15;
       background: rgba(15, 15, 20, 0.94);
       backdrop-filter: blur(12px);
       box-sizing: border-box;
@@ -373,337 +143,53 @@
       border-top-right-radius: 16px;
       transform: translateY(100%);
       transition: transform 0.28s ease-in-out;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      display: flex; flex-direction: column; gap: 10px;
       max-height: 48vh;
     }
-
-    #control-drawer.open {
-      transform: translateY(0);
-    }
-
-    .tab-bar {
-      display: flex;
-      gap: 6px;
-      justify-content: center;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-      padding-bottom: 8px;
-    }
-
-    .tab-btn {
-      background: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: #aaa;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .tab-btn.active {
-      background: var(--blue);
-      color: #fff;
-      border-color: var(--blue);
-    }
-
-    .tab-content {
-      display: none;
-      overflow-y: auto;
-      max-height: 32vh;
-    }
-
-    .tab-content.active {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
-    }
-
-    .chip-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #fff;
-      font-size: 12px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      padding: 6px 10px;
-      border-radius: 12px;
-    }
-
-    .chip-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
-
-    .sub-group {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      color: #ddd;
-    }
-
-    input[type="checkbox"] {
-      width: 14px;
-      height: 14px;
-      accent-color: var(--blue);
-      cursor: pointer;
-      margin: 0;
-    }
-
-    .ball-checkbox {
-      accent-color: var(--orange) !important;
-    }
-
-    @media (max-width: 760px) {
-      #top-controls {
-        right: auto;
-        width: calc(100vw - 32px);
-        flex-direction: column;
-        max-height: calc(100vh - 40px);
-        overflow-y: auto;
-      }
-
-      #status-overlay,
-      #alignment-panel {
-        width: min(360px, calc(100vw - 32px));
-        max-width: none;
-      }
-
-      #panel-toggle-controls {
-        top: calc(16px + env(safe-area-inset-top));
-        left: auto;
-        right: 16px;
-        justify-content: flex-end;
-        max-width: 45vw;
-      }
-
-      #top-controls {
-        padding-top: 42px;
-      }
-    }
+    #control-drawer.open { transform: translateY(0); }
+    .tab-bar { display: flex; gap: 6px; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 8px; }
+    .tab-btn { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #aaa; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .tab-btn.active { background: #007aff; color: #fff; border-color: #007aff; }
+    .tab-content { display: none; overflow-y: auto; max-height: 32vh; }
+    .tab-content.active { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .chip-item { display: flex; align-items: center; gap: 8px; color: #fff; font-size: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); padding: 6px 10px; border-radius: 12px; }
+    .chip-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .sub-group { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ddd; }
+    input[type="checkbox"] { width: 14px; height: 14px; accent-color: #007aff; cursor: pointer; margin: 0; }
+    .ball-checkbox { accent-color: #ff9500 !important; }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
-
 <body>
+
   <video id="webcam" autoplay playsinline muted></video>
   <div id="canvas-container"></div>
 
-  <!-- Top controls -->
-  <div id="top-controls">
-    <div id="status-overlay">
-      <div class="panel-header">
-        <span>Tracking Status</span>
-        <button class="hide-panel-btn" id="hide-status-btn">Hide</button>
-      </div>
-
-      <select id="engine-mode" class="engine-select">
-        <option value="precision">Mode: Precision (Hand & Face)</option>
-        <option value="holistic">Mode: Full Body (Holistic)</option>
-      </select>
-
-      <button id="start-btn">Start Tracking Engine</button>
-
-      <div id="status-text">Status: Ready</div>
-
-      <div id="offline-tag">✓ OFFLINE READY (Cached)</div>
-
-      <div id="pinch-badge">PINCH ACTIVE</div>
-
-      <div id="detection-indicators" style="margin-top: 8px; display: none;">
-        Active Tracking:
-        <div style="margin-top: 4px;">
-          <span id="badge-hand" class="detect-badge badge-off">HAND</span>
-          <span id="badge-face" class="detect-badge badge-off">FACE</span>
-          <span id="badge-pose" class="detect-badge badge-off">BODY</span>
-        </div>
-      </div>
-    </div>
-
-    <div id="alignment-panel">
-      <div class="panel-header">
-        <span>Manual Alignment</span>
-        <button class="hide-panel-btn" id="hide-alignment-btn">Hide</button>
-      </div>
-
-      <div class="alignment-description">
-        Adjust the overlay after tracking starts. Positive vertical values move
-        the skeleton down. Positive horizontal values move it right.
-      </div>
-
-      <div class="alignment-row">
-        <div class="alignment-label">
-          <span>Horizontal</span>
-          <span class="alignment-value" id="horizontal-display">0</span>
-        </div>
-
-        <div class="slider-line">
-          <input
-            id="horizontal-slider"
-            class="alignment-slider"
-            type="range"
-            min="-0.25"
-            max="0.25"
-            step="0.001"
-            value="0"
-          />
-
-          <input
-            id="horizontal-value"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="0"
-            aria-label="Horizontal current value"
-          />
-        </div>
-
-        <div class="range-caption">
-          <span>Min</span>
-          <input
-            id="horizontal-min"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="-0.25"
-            aria-label="Horizontal minimum"
-          />
-          <span>Max</span>
-          <input
-            id="horizontal-max"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="0.25"
-            aria-label="Horizontal maximum"
-          />
-        </div>
-      </div>
-
-      <div class="alignment-row">
-        <div class="alignment-label">
-          <span>Vertical</span>
-          <span class="alignment-value" id="vertical-display">0</span>
-        </div>
-
-        <div class="slider-line">
-          <input
-            id="vertical-slider"
-            class="alignment-slider"
-            type="range"
-            min="-0.25"
-            max="0.25"
-            step="0.001"
-            value="0"
-          />
-
-          <input
-            id="vertical-value"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="0"
-            aria-label="Vertical current value"
-          />
-        </div>
-
-        <div class="range-caption">
-          <span>Min</span>
-          <input
-            id="vertical-min"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="-0.25"
-            aria-label="Vertical minimum"
-          />
-          <span>Max</span>
-          <input
-            id="vertical-max"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="0.25"
-            aria-label="Vertical maximum"
-          />
-        </div>
-      </div>
-
-      <div class="alignment-row">
-        <div class="alignment-label">
-          <span>Scale</span>
-          <span class="alignment-value" id="scale-display">1</span>
-        </div>
-
-        <div class="slider-line">
-          <input
-            id="scale-slider"
-            class="alignment-slider"
-            type="range"
-            min="0.5"
-            max="1.5"
-            step="0.001"
-            value="1"
-          />
-
-          <input
-            id="scale-value"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="1"
-            aria-label="Scale current value"
-          />
-        </div>
-
-        <div class="range-caption">
-          <span>Min</span>
-          <input
-            id="scale-min"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="0.5"
-            aria-label="Scale minimum"
-          />
-          <span>Max</span>
-          <input
-            id="scale-max"
-            class="number-input"
-            type="number"
-            step="0.001"
-            value="1.5"
-            aria-label="Scale maximum"
-          />
-        </div>
-      </div>
-
-      <div class="alignment-buttons">
-        <button id="reset-alignment-btn">Reset Values</button>
-        <button id="clear-saved-btn">Clear Saved</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Button toggles for both top boxes -->
-  <div id="panel-toggle-controls">
-    <button id="show-status-btn">Show Status</button>
-    <button id="show-alignment-btn">Show Alignment</button>
-  </div>
-
-  <!-- Loading modal -->
   <div id="loading-modal">
     <div class="spinner"></div>
     <div id="loading-text">Loading Model...</div>
   </div>
 
-  <!-- Bottom drawer -->
+  <div id="status-overlay">
+    <select id="engine-mode" class="engine-select">
+      <option value="precision">Mode: Precision (Hand & Face)</option>
+      <option value="holistic">Mode: Full Body (Holistic)</option>
+    </select>
+    <button id="start-btn">Start Tracking Engine</button>
+    <div id="status-text" style="margin-top:8px; font-weight: 500;">Status: Ready</div>
+    <div id="offline-tag">✓ OFFLINE READY (Cached)</div>
+    <div id="pinch-badge">PINCH ACTIVE</div>
+    <div id="detection-indicators" style="margin-top:8px; display:none;">
+      Active Tracking:
+      <div style="margin-top: 4px;">
+        <span id="badge-hand" class="detect-badge badge-off">HAND</span>
+        <span id="badge-face" class="detect-badge badge-off">FACE</span>
+        <span id="badge-pose" class="detect-badge badge-off">BODY</span>
+      </div>
+    </div>
+  </div>
+
   <button id="menu-toggle-btn">Show Menu</button>
 
   <div id="control-drawer">
@@ -715,1413 +201,80 @@
 
     <div class="tab-content active" id="tab-hand">
       <div class="chip-item">
-        <label class="sub-group">
-          <input type="checkbox" id="toggle-hand-skel" checked />
-          Hand Skeleton
-        </label>
+        <label class="sub-group"><input type="checkbox" id="toggle-hand-skel" checked /> Hand Skeleton</label>
       </div>
     </div>
-
     <div class="tab-content" id="tab-face">
       <div class="chip-item">
-        <label class="sub-group">
-          <input type="checkbox" id="toggle-face-skel" checked />
-          Face Mesh
-        </label>
+        <label class="sub-group"><input type="checkbox" id="toggle-face-skel" checked /> Face Mesh</label>
       </div>
     </div>
-
     <div class="tab-content" id="tab-body">
       <div class="chip-item">
-        <label class="sub-group">
-          <input type="checkbox" id="toggle-pose-skel" checked />
-          Body Skeleton
-        </label>
+        <label class="sub-group"><input type="checkbox" id="toggle-pose-skel" checked /> Body Skeleton</label>
       </div>
     </div>
   </div>
 
   <script type="module">
-    import {
-      HolisticLandmarker,
-      HandLandmarker,
-      FaceLandmarker,
-      FilesetResolver
-    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+  import {
+    HolisticLandmarker,
+    HandLandmarker,
+    FaceLandmarker,
+    FilesetResolver
+  } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
 
-    /*
-      ============================================================
-      MANUAL ALIGNMENT SETTINGS
-      ============================================================
-
-      horizontal:
-        Positive values move the overlay right.
-        Negative values move the overlay left.
-
-      vertical:
-        Positive values move the overlay down.
-        Negative values move the overlay up.
-
-      scale:
-        1.0 is normal size.
-        1.1 is 10% larger.
-        0.9 is 10% smaller.
-    */
-
-    const ALIGNMENT_STORAGE_KEY = "tracking-alignment-settings-v1";
-
-    const alignment = {
-      horizontal: 0,
-      vertical: 0,
-      scale: 1
-    };
-
-    const DEFAULT_ALIGNMENT = {
-      horizontal: 0,
-      vertical: 0,
-      scale: 1
-    };
-
-    const video = document.getElementById("webcam");
-    const startBtn = document.getElementById("start-btn");
-    const engineSelect = document.getElementById("engine-mode");
-    const statusText = document.getElementById("status-text");
-    const container = document.getElementById("canvas-container");
-    const drawer = document.getElementById("control-drawer");
-    const menuToggleBtn = document.getElementById("menu-toggle-btn");
-    const loadingModal = document.getElementById("loading-modal");
-    const loadingText = document.getElementById("loading-text");
-
-    const badgeHand = document.getElementById("badge-hand");
-    const badgeFace = document.getElementById("badge-face");
-    const badgePose = document.getElementById("badge-pose");
-    const pinchBadge = document.getElementById("pinch-badge");
-    const detectIndicators = document.getElementById("detection-indicators");
-
-    const statusOverlay = document.getElementById("status-overlay");
-    const alignmentPanel = document.getElementById("alignment-panel");
-
-    /*
-      ============================================================
-      TOP PANEL SHOW/HIDE CONTROLS
-      ============================================================
-    */
-
-    document
-      .getElementById("hide-status-btn")
-      .addEventListener("click", () => {
-        statusOverlay.classList.add("hidden");
-      });
-
-    document
-      .getElementById("hide-alignment-btn")
-      .addEventListener("click", () => {
-        alignmentPanel.classList.add("hidden");
-      });
-
-    document
-      .getElementById("show-status-btn")
-      .addEventListener("click", () => {
-        statusOverlay.classList.remove("hidden");
-      });
-
-    document
-      .getElementById("show-alignment-btn")
-      .addEventListener("click", () => {
-        alignmentPanel.classList.remove("hidden");
-      });
-
-    /*
-      ============================================================
-      ALIGNMENT CONTROL HELPERS
-      ============================================================
-    */
-
-    const alignmentControls = {
-      horizontal: {
-        slider: document.getElementById("horizontal-slider"),
-        value: document.getElementById("horizontal-value"),
-        min: document.getElementById("horizontal-min"),
-        max: document.getElementById("horizontal-max"),
-        display: document.getElementById("horizontal-display")
-      },
-
-      vertical: {
-        slider: document.getElementById("vertical-slider"),
-        value: document.getElementById("vertical-value"),
-        min: document.getElementById("vertical-min"),
-        max: document.getElementById("vertical-max"),
-        display: document.getElementById("vertical-display")
-      },
-
-      scale: {
-        slider: document.getElementById("scale-slider"),
-        value: document.getElementById("scale-value"),
-        min: document.getElementById("scale-min"),
-        max: document.getElementById("scale-max"),
-        display: document.getElementById("scale-display")
-      }
-    };
-
-    function toNumber(input, fallback) {
-      const number = Number.parseFloat(input.value);
-      return Number.isFinite(number) ? number : fallback;
-    }
-
-    function formatValue(value) {
-      return Number(value).toFixed(3).replace(/\.?0+$/, "");
-    }
-
-    function saveAlignment() {
-      localStorage.setItem(
-        ALIGNMENT_STORAGE_KEY,
-        JSON.stringify(alignment)
-      );
-    }
-
-    function updateAlignmentDisplay(name) {
-      const control = alignmentControls[name];
-      const value = alignment[name];
-
-      control.slider.value = value;
-      control.value.value = formatValue(value);
-      control.display.textContent = formatValue(value);
-    }
-
-    function updateSliderRange(name) {
-      const control = alignmentControls[name];
-
-      let min = toNumber(control.min, -1);
-      let max = toNumber(control.max, 1);
-
-      if (min >= max) {
-        max = min + 0.001;
-        control.max.value = max;
-      }
-
-      control.slider.min = min;
-      control.slider.max = max;
-
-      let value = alignment[name];
-
-      if (value < min) value = min;
-      if (value > max) value = max;
-
-      alignment[name] = value;
-      updateAlignmentDisplay(name);
-      saveAlignment();
-    }
-
-    function setAlignmentValue(name, rawValue) {
-      const control = alignmentControls[name];
-      let value = Number.parseFloat(rawValue);
-
-      if (!Number.isFinite(value)) {
-        value = alignment[name];
-      }
-
-      const min = Number.parseFloat(control.slider.min);
-      const max = Number.parseFloat(control.slider.max);
-
-      value = Math.max(min, Math.min(max, value));
-      alignment[name] = value;
-
-      updateAlignmentDisplay(name);
-      saveAlignment();
-    }
-
-    function loadAlignment() {
-      try {
-        const saved = localStorage.getItem(ALIGNMENT_STORAGE_KEY);
-
-        if (saved) {
-          const parsed = JSON.parse(saved);
-
-          if (Number.isFinite(parsed.horizontal)) {
-            alignment.horizontal = parsed.horizontal;
-          }
-
-          if (Number.isFinite(parsed.vertical)) {
-            alignment.vertical = parsed.vertical;
-          }
-
-          if (Number.isFinite(parsed.scale)) {
-            alignment.scale = parsed.scale;
-          }
-        }
-      } catch (error) {
-        console.warn("Could not load saved alignment:", error);
-      }
-
-      updateAlignmentDisplay("horizontal");
-      updateAlignmentDisplay("vertical");
-      updateAlignmentDisplay("scale");
-    }
-
-    function resetAlignment() {
-      alignment.horizontal = DEFAULT_ALIGNMENT.horizontal;
-      alignment.vertical = DEFAULT_ALIGNMENT.vertical;
-      alignment.scale = DEFAULT_ALIGNMENT.scale;
-
-      updateAlignmentDisplay("horizontal");
-      updateAlignmentDisplay("vertical");
-      updateAlignmentDisplay("scale");
-      saveAlignment();
-    }
-
-    Object.keys(alignmentControls).forEach(name => {
-      const control = alignmentControls[name];
-
-      control.slider.addEventListener("input", () => {
-        setAlignmentValue(name, control.slider.value);
-      });
-
-      control.value.addEventListener("change", () => {
-        setAlignmentValue(name, control.value.value);
-      });
-
-      control.value.addEventListener("keydown", event => {
-        if (event.key === "Enter") {
-          setAlignmentValue(name, control.value.value);
-          control.value.blur();
-        }
-      });
-
-      control.min.addEventListener("change", () => {
-        updateSliderRange(name);
-      });
-
-      control.max.addEventListener("change", () => {
-        updateSliderRange(name);
-      });
+  // Register SW for Offline Play
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then((reg) => {
+          console.log('[SW] Service Worker Registered Successfully:', reg.scope);
+          document.getElementById('offline-tag').style.display = 'block';
+        })
+        .catch((err) => console.error('[SW] Registration Failed:', err));
     });
+  }
 
-    document
-      .getElementById("reset-alignment-btn")
-      .addEventListener("click", resetAlignment);
+  const video = document.getElementById('webcam');
+  const startBtn = document.getElementById('start-btn');
+  const engineSelect = document.getElementById('engine-mode');
+  const statusText = document.getElementById('status-text');
+  const container = document.getElementById('canvas-container');
+  const drawer = document.getElementById('control-drawer');
+  const menuToggleBtn = document.getElementById('menu-toggle-btn');
+  const loadingModal = document.getElementById('loading-modal');
+  const loadingText = document.getElementById('loading-text');
 
-    document
-      .getElementById("clear-saved-btn")
-      .addEventListener("click", () => {
-        localStorage.removeItem(ALIGNMENT_STORAGE_KEY);
-        resetAlignment();
-      });
+  const badgeHand = document.getElementById('badge-hand');
+  const badgeFace = document.getElementById('badge-face');
+  const badgePose = document.getElementById('badge-pose');
+  const pinchBadge = document.getElementById('pinch-badge');
+  const detectIndicators = document.getElementById('detection-indicators');
 
-    loadAlignment();
+  menuToggleBtn.addEventListener('click', () => {
+    const isOpen = drawer.classList.toggle('open');
+    menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
+  });
 
-    /*
-      ============================================================
-      BOTTOM DRAWER
-      ============================================================
-    */
+  const tabs = [
+    { btn: document.getElementById('tab-btn-hand'), content: document.getElementById('tab-hand') },
+    { btn: document.getElementById('tab-btn-face'), content: document.getElementById('tab-face') },
+    { btn: document.getElementById('tab-btn-body'), content: document.getElementById('tab-body') }
+  ];
 
-    menuToggleBtn.addEventListener("click", () => {
-      const isOpen = drawer.classList.toggle("open");
-      menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
+  tabs.forEach(({ btn, content }) => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(t => { t.btn.classList.remove('active'); t.content.classList.remove('active'); });
+      btn.classList.add('active'); content.classList.add('active');
     });
-
-    const tabs = [
-      {
-        btn: document.getElementById("tab-btn-hand"),
-        content: document.getElementById("tab-hand")
-      },
-      {
-        btn: document.getElementById("tab-btn-face"),
-        content: document.getElementById("tab-face")
-      },
-      {
-        btn: document.getElementById("tab-btn-body"),
-        content: document.getElementById("tab-body")
-      }
-    ];
-
-    tabs.forEach(({ btn, content }) => {
-      btn.addEventListener("click", () => {
-        tabs.forEach(tab => {
-          tab.btn.classList.remove("active");
-          tab.content.classList.remove("active");
-        });
-
-        btn.classList.add("active");
-        content.classList.add("active");
-      });
-    });
-
-    /*
-      ============================================================
-      TRACKING DATA
-      ============================================================
-    */
-
-    const HAND_POINTS = [
-      {
-        id: "wrist",
-        label: "Wrist",
-        color: "#ffffff",
-        landmark: 0,
-        category: "hand",
-        defaultShow: false
-      },
-      {
-        id: "thumb",
-        label: "Thumb",
-        color: "#ff6b6b",
-        landmark: 4,
-        category: "hand",
-        defaultShow: false
-      },
-      {
-        id: "index",
-        label: "Index Tip",
-        color: "#4dd0e1",
-        landmark: 8,
-        category: "hand",
-        defaultShow: true
-      },
-      {
-        id: "middle",
-        label: "Middle Tip",
-        color: "#ffd54f",
-        landmark: 12,
-        category: "hand",
-        defaultShow: false
-      },
-      {
-        id: "ring",
-        label: "Ring Tip",
-        color: "#ba68c8",
-        landmark: 16,
-        category: "hand",
-        defaultShow: false
-      },
-      {
-        id: "pinky",
-        label: "Pinky Tip",
-        color: "#81c784",
-        landmark: 20,
-        category: "hand",
-        defaultShow: false
-      },
-      {
-        id: "palm",
-        label: "Palm",
-        color: "#ff9800",
-        landmark: "palm",
-        category: "hand",
-        defaultShow: false
-      }
-    ];
-
-    const FACE_POINTS = [
-      {
-        id: "nose",
-        label: "Nose Tip",
-        color: "#ff4081",
-        landmark: 1,
-        category: "face",
-        defaultShow: true
-      },
-      {
-        id: "forehead",
-        label: "Forehead",
-        color: "#ab47bc",
-        landmark: 10,
-        category: "face",
-        defaultShow: false
-      },
-      {
-        id: "chin",
-        label: "Chin",
-        color: "#26a69a",
-        landmark: 152,
-        category: "face",
-        defaultShow: false
-      },
-      {
-        id: "eyeL",
-        label: "Left Eye",
-        color: "#42a5f5",
-        landmark: 33,
-        category: "face",
-        defaultShow: false
-      },
-      {
-        id: "eyeR",
-        label: "Right Eye",
-        color: "#5c6bc0",
-        landmark: 263,
-        category: "face",
-        defaultShow: false
-      },
-      {
-        id: "mouth",
-        label: "Mouth",
-        color: "#ff7043",
-        landmark: 13,
-        category: "face",
-        defaultShow: false
-      }
-    ];
-
-    const BODY_POINTS = [
-      {
-        id: "shL",
-        label: "L Shoulder",
-        color: "#e91e63",
-        landmark: 11,
-        category: "pose",
-        defaultShow: true
-      },
-      {
-        id: "shR",
-        label: "R Shoulder",
-        color: "#9c27b0",
-        landmark: 12,
-        category: "pose",
-        defaultShow: false
-      },
-      {
-        id: "elbL",
-        label: "L Elbow",
-        color: "#3f51b5",
-        landmark: 13,
-        category: "pose",
-        defaultShow: false
-      },
-      {
-        id: "elbR",
-        label: "R Elbow",
-        color: "#00bcd4",
-        landmark: 14,
-        category: "pose",
-        defaultShow: false
-      },
-      {
-        id: "kneL",
-        label: "L Knee",
-        color: "#4caf50",
-        landmark: 25,
-        category: "pose",
-        defaultShow: false
-      },
-      {
-        id: "kneR",
-        label: "R Knee",
-        color: "#cddc39",
-        landmark: 26,
-        category: "pose",
-        defaultShow: false
-      }
-    ];
-
-    const PALM_LANDMARKS = [0, 5, 9, 13, 17];
-
-    const HAND_CONNECTIONS = [
-      [0, 1], [1, 2], [2, 3], [3, 4],
-      [0, 5], [5, 6], [6, 7], [7, 8],
-      [5, 9], [9, 10], [10, 11], [11, 12],
-      [9, 13], [13, 14], [14, 15], [15, 16],
-      [13, 17], [17, 18], [18, 19], [19, 20],
-      [0, 17]
-    ];
-
-    const POSE_CONNECTIONS = [
-      [11, 12], [11, 13], [13, 15],
-      [12, 14], [14, 16],
-      [11, 23], [12, 24], [23, 24],
-      [23, 25], [24, 26], [25, 27], [26, 28]
-    ];
-
-    const FACE_CONNECTIONS = [
-      [61, 146], [146, 91], [91, 181], [181, 84],
-      [84, 17], [17, 314], [314, 405], [405, 321],
-      [321, 375], [375, 291],
-
-      [61, 185], [185, 40], [40, 39], [39, 37],
-      [37, 0], [0, 267], [267, 269], [269, 270],
-      [270, 409], [409, 291],
-
-      [33, 160], [160, 158], [158, 133],
-      [133, 153], [153, 144], [144, 33],
-
-      [263, 387], [387, 385], [385, 362],
-      [362, 380], [380, 373], [373, 263],
-
-      [10, 338], [338, 297], [297, 332], [332, 284],
-      [284, 251], [251, 389], [389, 356], [356, 454],
-      [454, 323], [323, 361], [361, 288], [288, 397],
-      [397, 365], [365, 379], [379, 378], [378, 400],
-      [400, 377], [377, 152],
-
-      [152, 148], [148, 176], [176, 149], [149, 150],
-      [150, 136], [136, 172], [172, 58], [58, 132],
-      [132, 93], [93, 234], [234, 127], [127, 162],
-      [162, 21], [21, 54], [54, 103], [103, 67],
-      [67, 109], [109, 10]
-    ];
-
-    let currentBallTargetId = "index";
-
-    const PROXIMITY_TRANSFER_THRESHOLD = 0.20;
-    const PINCH_THRESHOLD = 0.055;
-
-    let holisticLandmarker = null;
-    let handLandmarker = null;
-    let faceLandmarker = null;
-    let activeEngine = "precision";
-
-    let lastVideoTime = -1;
-
-    const LERP_FACTOR = 0.35;
-    const TARGET_SCALE = 0.12;
-    const SCALE_SPEED = 0.08;
-    const UNPROJECT_DISTANCE = 1.8;
-
-    const _ndc = new THREE.Vector3();
-    const _dir = new THREE.Vector3();
-
-    /*
-      ============================================================
-      THREE.JS
-      ============================================================
-    */
-
-    const scene = new THREE.Scene();
-
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
-
-    camera.position.z = 2;
-
-    const renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true
-    });
-
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
-
-    const trackers = {};
-
-    function registerPoints(pointsList) {
-      pointsList.forEach(point => {
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          new THREE.MeshBasicMaterial({
-            color: point.color
-          })
-        );
-
-        mesh.scale.set(0, 0, 0);
-        scene.add(mesh);
-
-        trackers[point.id] = {
-          id: point.id,
-          label: point.label,
-          mesh,
-          enabled: point.defaultShow,
-          landmark: point.landmark,
-          category: point.category,
-          active: false,
-          currentPos: new THREE.Vector3(),
-          targetPos: new THREE.Vector3(),
-          scale: 0
-        };
-      });
-    }
-
-    registerPoints(HAND_POINTS);
-    registerPoints(FACE_POINTS);
-    registerPoints(BODY_POINTS);
-
-    /*
-      ============================================================
-      BUTTERFLY
-      ============================================================
-    */
-
-    function createProceduralButterfly() {
-      const butterflyGroup = new THREE.Group();
-
-      const canvas = document.createElement("canvas");
-      canvas.width = 256;
-      canvas.height = 256;
-
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, 256, 256);
-
-      const grad = ctx.createRadialGradient(
-        128,
-        128,
-        10,
-        128,
-        128,
-        120
-      );
-
-      grad.addColorStop(0, "#ff9500");
-      grad.addColorStop(0.6, "#ff2d55");
-      grad.addColorStop(1, "#5856d6");
-
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(10, 128);
-      ctx.bezierCurveTo(20, 20, 220, 10, 240, 100);
-      ctx.bezierCurveTo(250, 180, 180, 250, 100, 240);
-      ctx.bezierCurveTo(20, 220, 0, 180, 10, 128);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.7)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(10, 128);
-      ctx.lineTo(200, 90);
-      ctx.moveTo(10, 128);
-      ctx.lineTo(180, 160);
-      ctx.moveTo(10, 128);
-      ctx.lineTo(120, 210);
-      ctx.stroke();
-
-      const wingTexture = new THREE.CanvasTexture(canvas);
-
-      const wingMat = new THREE.MeshStandardMaterial({
-        map: wingTexture,
-        transparent: true,
-        side: THREE.DoubleSide,
-        roughness: 0.3,
-        metalness: 0.1
-      });
-
-      const wingGeo = new THREE.PlaneGeometry(0.22, 0.22);
-      wingGeo.translate(0.11, 0, 0);
-
-      const leftWing = new THREE.Mesh(wingGeo, wingMat);
-
-      const rightWingGeo = new THREE.PlaneGeometry(0.22, 0.22);
-      rightWingGeo.translate(-0.11, 0, 0);
-
-      const rightWing = new THREE.Mesh(rightWingGeo, wingMat);
-
-      const bodyGeo = new THREE.CylinderGeometry(
-        0.012,
-        0.008,
-        0.18,
-        12
-      );
-
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x111111,
-        roughness: 0.8
-      });
-
-      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-
-      butterflyGroup.add(leftWing);
-      butterflyGroup.add(rightWing);
-      butterflyGroup.add(bodyMesh);
-
-      return {
-        group: butterflyGroup,
-        leftWing,
-        rightWing
-      };
-    }
-
-    const butterfly = createProceduralButterfly();
-    const ballMesh = butterfly.group;
-
-    ballMesh.scale.set(0, 0, 0);
-    scene.add(ballMesh);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1.4);
-    light.position.set(1, 2, 3);
-    scene.add(light);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-
-    let ballScale = 0;
-    const ballPos = new THREE.Vector3();
-
-    let isPinched = false;
-    const pinchPosition = new THREE.Vector3();
-
-    /*
-      ============================================================
-      SKELETON GEOMETRY
-      ============================================================
-    */
-
-    const handSkelGeom = new THREE.BufferGeometry();
-
-    handSkelGeom.setAttribute(
-      "position",
-      new THREE.BufferAttribute(
-        new Float32Array(HAND_CONNECTIONS.length * 6),
-        3
-      )
-    );
-
-    const handSkelLines = new THREE.LineSegments(
-      handSkelGeom,
-      new THREE.LineBasicMaterial({
-        color: 0x00ff88,
-        transparent: true,
-        opacity: 0.8
-      })
-    );
-
-    scene.add(handSkelLines);
-
-    const poseSkelGeom = new THREE.BufferGeometry();
-
-    poseSkelGeom.setAttribute(
-      "position",
-      new THREE.BufferAttribute(
-        new Float32Array(POSE_CONNECTIONS.length * 6),
-        3
-      )
-    );
-
-    const poseSkelLines = new THREE.LineSegments(
-      poseSkelGeom,
-      new THREE.LineBasicMaterial({
-        color: 0x007aff,
-        transparent: true,
-        opacity: 0.8
-      })
-    );
-
-    scene.add(poseSkelLines);
-
-    const faceSkelGeom = new THREE.BufferGeometry();
-
-    faceSkelGeom.setAttribute(
-      "position",
-      new THREE.BufferAttribute(
-        new Float32Array(FACE_CONNECTIONS.length * 6),
-        3
-      )
-    );
-
-    const faceSkelLines = new THREE.LineSegments(
-      faceSkelGeom,
-      new THREE.LineBasicMaterial({
-        color: 0xff4081,
-        transparent: true,
-        opacity: 0.8
-      })
-    );
-
-    scene.add(faceSkelLines);
-
-    const handWorldPositions = new Array(21)
-      .fill(null)
-      .map(() => new THREE.Vector3());
-
-    const faceWorldPositions = new Array(478)
-      .fill(null)
-      .map(() => new THREE.Vector3());
-
-    const poseWorldPositions = new Array(33)
-      .fill(null)
-      .map(() => new THREE.Vector3());
-
-    let handVisible = false;
-    let faceVisible = false;
-    let poseVisible = false;
-
-    /*
-      ============================================================
-      TARGET UI
-      ============================================================
-    */
-
-    function buildUI() {
-      const createChip = (point, containerEl) => {
-        const chip = document.createElement("div");
-        chip.className = "chip-item";
-
-        chip.innerHTML = `
-          <span
-            class="chip-dot"
-            style="background:${point.color}"
-          ></span>
-
-          <label class="sub-group">
-            <input
-              type="checkbox"
-              class="show-chk"
-              id="show-${point.id}"
-              ${point.defaultShow ? "checked" : ""}
-            />
-            ${point.label}
-          </label>
-
-          <label
-            class="sub-group"
-            style="
-              margin-left:6px;
-              border-left:1px solid #444;
-              padding-left:6px;
-            "
-          >
-            <input
-              type="checkbox"
-              class="ball-checkbox"
-              id="ball-${point.id}"
-              ${point.id === currentBallTargetId ? "checked" : ""}
-            />
-            Ball
-          </label>
-        `;
-
-        containerEl.appendChild(chip);
-
-        chip
-          .querySelector(".show-chk")
-          .addEventListener("change", event => {
-            trackers[point.id].enabled = event.target.checked;
-          });
-
-        chip
-          .querySelector(".ball-checkbox")
-          .addEventListener("change", event => {
-            if (event.target.checked) {
-              setBallTarget(point.id);
-            } else if (currentBallTargetId === point.id) {
-              event.target.checked = true;
-            }
-          });
-      };
-
-      HAND_POINTS.forEach(point =>
-        createChip(point, document.getElementById("tab-hand"))
-      );
-
-      FACE_POINTS.forEach(point =>
-        createChip(point, document.getElementById("tab-face"))
-      );
-
-      BODY_POINTS.forEach(point =>
-        createChip(point, document.getElementById("tab-body"))
-      );
-    }
-
-    function setBallTarget(targetId) {
-      currentBallTargetId = targetId;
-
-      Object.keys(trackers).forEach(id => {
-        const checkbox = document.getElementById(`ball-${id}`);
-
-        if (checkbox) {
-          checkbox.checked = id === targetId;
-        }
-      });
-    }
-
-    buildUI();
-
-    /*
-      ============================================================
-      VIDEO CROP MAPPING
-      ============================================================
-    */
-
-    function mapToVisible(x, y) {
-      if (!video.videoWidth || !video.videoHeight) {
-        return { x, y };
-      }
-
-      const screenAspect =
-        window.innerWidth / window.innerHeight;
-
-      const videoAspect =
-        video.videoWidth / video.videoHeight;
-
-      let visibleWidth = 1;
-      let visibleHeight = 1;
-
-      if (screenAspect > videoAspect) {
-        // The display is wider than the camera frame.
-        // The video is cropped vertically.
-        visibleHeight = videoAspect / screenAspect;
-      } else {
-        // The display is taller/narrower than the camera frame.
-        // The video is cropped horizontally.
-        visibleWidth = screenAspect / videoAspect;
-      }
-
-      const cropStartX = (1 - visibleWidth) / 2;
-      const cropStartY = (1 - visibleHeight) / 2;
-
-      const clamp = (value, min, max) =>
-        Math.max(min, Math.min(max, value));
-
-      return {
-        x: clamp(
-          (x - cropStartX) / visibleWidth,
-          0,
-          1
-        ),
-
-        y: clamp(
-          (y - cropStartY) / visibleHeight,
-          0,
-          1
-        )
-      };
-    }
-
-    /*
-      ============================================================
-      LANDMARK TO THREE.JS POSITION
-      ============================================================
-    */
-
-    function landmarkToWorld(landmark, outVec) {
-      const mapped = mapToVisible(
-        landmark.x,
-        landmark.y
-      );
-
-      /*
-        Manual alignment is applied here.
-
-        horizontal:
-          Positive = right
-          Negative = left
-
-        vertical:
-          Positive = down
-          Negative = up
-
-        scale:
-          Scales the position around the center of the screen.
-      */
-
-      const adjustedX =
-        0.5 + (mapped.x - 0.5) * alignment.scale
-        + alignment.horizontal;
-
-      const adjustedY =
-        0.5 + (mapped.y - 0.5) * alignment.scale
-        + alignment.vertical;
-
-      const clampedX = Math.max(0, Math.min(1, adjustedX));
-      const clampedY = Math.max(0, Math.min(1, adjustedY));
-
-      /*
-        The webcam is mirrored with CSS:
-          transform: scaleX(-1)
-
-        Therefore the overlay coordinates are mirrored here too.
-      */
-      const mirroredX = 1 - clampedX;
-
-      _ndc.set(
-        mirroredX * 2 - 1,
-        -(clampedY * 2 - 1),
-        0.5
-      );
-
-      _ndc.unproject(camera);
-
-      _dir
-        .copy(_ndc)
-        .sub(camera.position)
-        .normalize();
-
-      outVec.copy(camera.position).add(
-        _dir.multiplyScalar(UNPROJECT_DISTANCE)
-      );
-
-      return outVec;
-    }
-
-    /*
-      ============================================================
-      PINCH DETECTION
-      ============================================================
-    */
-
-    function detectPinchGesture(landmarks) {
-      if (!landmarks || landmarks.length < 9) {
-        return false;
-      }
-
-      const thumbTip = landmarks[4];
-      const indexTip = landmarks[8];
-
-      const dx = thumbTip.x - indexTip.x;
-      const dy = thumbTip.y - indexTip.y;
-      const dz =
-        (thumbTip.z || 0) -
-        (indexTip.z || 0);
-
-      const distance = Math.sqrt(
-        dx * dx +
-        dy * dy +
-        dz * dz
-      );
-
-      return distance < PINCH_THRESHOLD;
-    }
-
-    /*
-      ============================================================
-      CAMERA AND MODEL STARTUP
-      ============================================================
-    */
-
-    async function startApp() {
-      activeEngine = engineSelect.value;
-
-      startBtn.style.display = "none";
-      engineSelect.disabled = true;
-
-      loadingModal.style.display = "flex";
-      loadingText.innerText = "Accessing Camera...";
-
-      try {
-        if (!video.srcObject) {
-          const stream =
-            await navigator.mediaDevices.getUserMedia({
-              video: {
-                facingMode: "user",
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-              },
-              audio: false
-            });
-
-          video.srcObject = stream;
-        }
-
-        await video.play();
-
-        await new Promise(resolve => {
-          if (video.readyState >= 1) {
-            resolve();
-          } else {
-            video.onloadedmetadata = resolve;
-          }
-        });
-
-        console.log("Camera dimensions:", {
-          width: video.videoWidth,
-          height: video.videoHeight,
-          screenWidth: window.innerWidth,
-          screenHeight: window.innerHeight,
-          devicePixelRatio: window.devicePixelRatio
-        });
-
-        loadingText.innerText = "Loading Vision Engine...";
-
-        const visionFiles =
-          await FilesetResolver.forVisionTasks(
-            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm"
-          );
-
-        if (activeEngine === "precision") {
-          loadingText.innerText =
-            "Loading Precision Models...";
-
-          handLandmarker =
-            await HandLandmarker.createFromOptions(
-              visionFiles,
-              {
-                baseOptions: {
-                  modelAssetPath:
-                    "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-                  delegate: "GPU"
-                },
-                runningMode: "VIDEO",
-                numHands: 2
-              }
-            );
-
-          faceLandmarker =
-            await FaceLandmarker.createFromOptions(
-              visionFiles,
-              {
-                baseOptions: {
-                  modelAssetPath:
-                    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-                  delegate: "GPU"
-                },
-                runningMode: "VIDEO",
-                numFaces: 1
-              }
-            );
-        } else {
-          loadingText.innerText =
-            "Loading Full Body Model...";
-
-          holisticLandmarker =
-            await HolisticLandmarker.createFromOptions(
-              visionFiles,
-              {
-                baseOptions: {
-                  modelAssetPath:
-                    "https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task",
-                  delegate: "GPU"
-                },
-                runningMode: "VIDEO"
-              }
-            );
-        }
-
-        loadingModal.style.display = "none";
-        statusText.innerText =
-          `Tracking Active (${activeEngine.toUpperCase()})`;
-
-        detectIndicators.style.display = "block";
-
-        render();
-      } catch (error) {
-        loadingModal.style.display = "none";
-        startBtn.style.display = "block";
-        engineSelect.disabled = false;
-
-        statusText.innerText =
-          "Error: " + error.message;
-
-        console.error(error);
-      }
-    }
-
-    startBtn.addEventListener("click", startApp);
-
-    /*
-      ============================================================
-      PRECISION FRAME PROCESSING
-      ============================================================
-    */
-
-    function processPrecisionFrame(now) {
-      const handResult =
-        handLandmarker.detectForVideo(video, now);
-
-      if (
-        handResult.landmarks &&
-        handResult.landmarks.length > 0
-      ) {
-        handVisible = true;
-
-        const handPoints =
-          handResult.landmarks[0];
-
-        for (let i = 0; i < 21; i++) {
-          landmarkToWorld(
-            handPoints[i],
-            handWorldPositions[i]
-          );
-        }
-
-        isPinched =
-          detectPinchGesture(handPoints);
-
-        if (isPinched) {
-          pinchPosition
-            .copy(handWorldPositions[4])
-            .add(handWorldPositions[8])
-            .multiplyScalar(0.5);
-        }
-      } else {
-        handVisible = false;
-        isPinched = false;
-      }
-
-      const faceResult =
-        faceLandmarker.detectForVideo(video, now);
-
-      if (
-        faceResult.faceLandmarks &&
-        faceResult.faceLandmarks.length > 0
-      ) {
-        faceVisible = true;
-
-        const facePoints =
-          faceResult.faceLandmarks[0];
-
-        for (let i = 0; i < facePoints.length; i++) {
-          landmarkToWorld(
-            facePoints[i],
-            faceWorldPositions[i]
-          );
-        }
-      } else {
-        faceVisible = false;
-      }
-
-      poseVisible = false;
-    }
-
-    /*
-      ============================================================
-      HOLISTIC FRAME PROCESSING
-      ============================================================
-    */
-
-    function processHolisticFrame(now) {
-      const result =
-        holisticLandmarker.detectForVideo(video, now);
-
-      let handLandmarks = null;
-
-      if (
-        result.rightHandLandmarks &&
-        result.rightHandLandmarks.length > 0
-      ) {
-        handLandmarks =
-          result.rightHandLandmarks[0] ||
-          result.rightHandLandmarks;
-      } else if (
-        result.leftHandLandmarks &&
-        result.leftHandLandmarks.length > 0
-      ) {
-        handLandmarks =
-          result.leftHandLandmarks[0] ||
-          result.leftHandLandmarks;
-      }
-
-      if (
-        handLandmarks &&
-        handLandmarks.length === 21
-      ) {
-        handVisible = true;
-
-        for (let i = 0; i < 21; i++) {
-          landmarkToWorld(
-            handLandmarks[i],
-            handWorldPositions[i]
-          );
-        }
-
-        isPinched =
-          detectPinchGesture(handLandmarks);
-
-        if (isPinched) {
-          pinchPosition
-            .copy(handWorldPositions[4])
-            .add(handWorldPositions[8])
-            .multiplyScalar(0.5);
-        }
-      } else {
-        handVisible = false;
-        isPinched = false;
-      }
-
-      if (
-        result.faceLandmarks &&
-        result.faceLandmarks.length > 0
-      ) {
-        faceVisible = true;
-
-        const facePoints =
-          result.faceLandmarks[0] ||
-          result.faceLandmarks;
-
-        for (let i = 0; i < facePoints.length; i++) {
-          landmarkToWorld(
-            facePoints[i],
-            faceWorldPositions[i]
-          );
-        }
-      } else {
-        faceVisible = false;
-      }
-
-      if (
-        result.poseLandmarks &&
-        result.poseLandmarks.length > 0
-      ) {
-        poseVisible = true;
-
-        const bodyPoints =
-          result.poseLandmarks[0] ||
-          result.poseLandmarks;
-
-        for (let i = 0; i < bodyPoints.length; i++) {
-          landmarkToWorld(
-            bodyPoints[i],
-            poseWorldPositions[i]
-          );
-        }
-      } else {
-        poseVisible = false;
-      }
-    }
-
-    /*
-      ============================================================
-      MAIN RENDER LOOP
-      ============================================================
-    */
-
-    function render() {
-      requestAnimationFrame(render);
-
-      if (
-        video.currentTime !== lastVideoTime &&
-        video.videoWidth > 0
-      ) {
-        lastVideoTime = video.currentTime;
-
-        const now = performance.now();
-
-        try {
-          if (
-            activeEngine === "precision" &&
-            handLandmarker &&
-            faceLandmarker
-          ) {
-            processPrecisionFrame(now);
-          } else if (
-            activeEngine === "holistic" &&
-            holisticLandmarker
-          ) {
-            processHolisticFrame(now);
-          }
-
-          badgeHand.className =
-            "detect-badge " +
-            (handVisible ? "badge-on" : "badge-off");
-
-          badgeFace.className =
-            "detect-badge " +
-            (faceVisible ? "badge-on" : "badge-off");
-
-          badgePose.className =
-            "detect-badge " +
-            (poseVisible ? "badge-on" : "badge-off");
-
-          pinchBadge.style.visibility =
-            isPinched ? "visible" : "hidden";
-
-          Object.values(trackers).forEach(tracker => {
-            let isVisible = false;
-            let sourceArray = null;
-
-            if (
-              tracker.category === "hand" &&
-              handVisible
-            ) {
-              isVisible = true;
-              sourceArray = handWorldPositions;
-            } else if (
-              tracker.category === "face" &&
-              faceVisible
-            ) {
-              isVisible = true;
-              sourceArray = faceWorldPositions;
-            } else if (
-              tracker.category === "pose" &&
-              poseVisible
-            )
+  });
+
+  const HAND_POINTS = [
+    { id: 'wrist',  label: 'Wrist',      color: '#ffffff', landmark: 0,  category: 'hand', defaultShow: false },
+    { id: 'thumb',  label: 'Thumb',      color: '#ff6b6b', landmark: 4,  category: 'hand', defaultShow: false },
+    { id: 'index',  label: 'Index Tip',  color: '#4dd0e1', landmark: 8,  category: 'hand', defaultShow: true  },
+    { id: 'middle', label: 'Middle Tip', color: '#ffd54f', landmark: 12, category: 'hand', defaultShow: false },
+    { id: 'ring',   label: 'Ring Tip',   color: '#ba68c8', landmark: 16, category: 'hand', defaultShow: false },
+    { id: 'pinky',  label: 'Pinky Tip',  color: '#81c784', landmark: 20, category: 'hand', defaultShow: false },
+    { id: 'palm',   la
