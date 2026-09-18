@@ -158,14 +158,14 @@
     .ball-checkbox { accent-color: #ff9500 !important; }
 
 
-    /* Top alignment panel: added without changing the existing bottom menu. */
+    /* Top calibration panel: does not change the existing bottom menu. */
     #top-alignment-panel {
       position: absolute;
       top: 16px;
       left: min(352px, calc(100vw - 32px));
       z-index: 11;
-      width: min(260px, calc(100vw - 368px));
-      min-width: 220px;
+      width: min(300px, calc(100vw - 368px));
+      min-width: 250px;
       color: #fff;
       background: rgba(15, 15, 20, 0.94);
       backdrop-filter: blur(12px);
@@ -176,35 +176,22 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       transition: opacity .25s ease, transform .25s ease;
     }
-    #top-alignment-panel.hidden,
-    #status-overlay.hidden {
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(-12px);
-    }
-    .alignment-title { margin: 0 0 10px; font-size: 12px; font-weight: 700; }
+    #top-alignment-panel.hidden, #status-overlay.hidden { opacity: 0; pointer-events: none; transform: translateY(-12px); }
+    .alignment-title { margin: 0 0 8px; font-size: 12px; font-weight: 700; }
+    .mode-switch { display: flex; gap: 6px; margin-bottom: 10px; }
+    .mode-switch button { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,.25); border-radius: 7px; color: #bbb; background: rgba(255,255,255,.07); cursor: pointer; font-size: 11px; }
+    .mode-switch button.active { color: #fff; background: #007aff; border-color: #007aff; }
     .alignment-row { display: grid; grid-template-columns: 64px 1fr 44px; align-items: center; gap: 7px; margin: 8px 0; font-size: 11px; }
     .alignment-row input[type="range"] { width: 100%; accent-color: #007aff; }
-    .alignment-value { width: 44px; padding: 4px; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 5px; font-size: 11px; text-align: center; }
-    .alignment-reset { width: 100%; margin-top: 4px; padding: 7px 10px; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 7px; cursor: pointer; font-size: 11px; }
-    #top-controls-toggle-btn {
-      position: absolute;
-      top: 178px;
-      left: 16px;
-      z-index: 12;
-      background: rgba(0, 122, 255, 0.9);
-      color: #fff;
-      border: none;
-      padding: 10px 22px;
-      border-radius: 999px;
-      font-size: 14px;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      cursor: pointer;
-      backdrop-filter: blur(8px);
-    }
+    .alignment-value, .range-input { width: 44px; padding: 4px; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 5px; font-size: 11px; text-align: center; }
+    .range-settings { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.15); }
+    .range-settings-title { margin-bottom: 6px; font-size: 10px; color: #bbb; }
+    .range-setting-row { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 6px; align-items: center; margin: 5px 0; font-size: 10px; }
+    .range-input { width: 100%; }
+    .alignment-reset { width: 100%; margin-top: 10px; padding: 7px 10px; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 7px; cursor: pointer; font-size: 11px; }
+    #top-controls-toggle-btn { position: absolute; top: 178px; left: 16px; z-index: 12; background: rgba(0,122,255,.9); color: #fff; border: none; padding: 10px 22px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,.4); cursor: pointer; backdrop-filter: blur(8px); }
     #top-controls-toggle-btn.controls-hidden { top: 16px; }
-    @media (max-width: 680px) {
+    @media (max-width: 760px) {
       #status-overlay { width: calc(50vw - 20px); max-width: none; padding: 10px; }
       #top-alignment-panel { left: calc(50% + 4px); width: calc(50% - 20px); min-width: 0; padding: 10px; }
       .alignment-row { grid-template-columns: 52px 1fr 38px; gap: 5px; font-size: 10px; }
@@ -244,24 +231,28 @@
     </div>
   </div>
 
-  <aside id="top-alignment-panel" aria-label="Skeleton alignment controls">
-    <div class="alignment-title">Skeleton Alignment</div>
+  <aside id="top-alignment-panel" aria-label="Alignment controls">
+    <div class="alignment-title" id="alignment-panel-title">Skeleton Alignment</div>
+    <div class="mode-switch" aria-label="Alignment mode">
+      <button id="skeleton-mode-btn" class="active" type="button">Skeleton Mode</button>
+      <button id="image-mode-btn" type="button">Image Mode</button>
+    </div>
     <label class="alignment-row" for="align-horizontal">
-      <span>Horizontal</span>
-      <input id="align-horizontal" type="range" min="-1" max="1" step="0.01" value="0" />
-      <output id="align-horizontal-value" class="alignment-value">0.00</output>
+      <span>Horizontal</span><input id="align-horizontal" type="range" min="-1" max="1" step="0.01" value="0" /><output id="align-horizontal-value" class="alignment-value">0.00</output>
     </label>
     <label class="alignment-row" for="align-vertical">
-      <span>Vertical</span>
-      <input id="align-vertical" type="range" min="-1" max="1" step="0.01" value="0" />
-      <output id="align-vertical-value" class="alignment-value">0.00</output>
+      <span>Vertical</span><input id="align-vertical" type="range" min="-1" max="1" step="0.01" value="0" /><output id="align-vertical-value" class="alignment-value">0.00</output>
     </label>
     <label class="alignment-row" for="align-scale">
-      <span>Scale</span>
-      <input id="align-scale" type="range" min="0.5" max="1.5" step="0.01" value="1" />
-      <output id="align-scale-value" class="alignment-value">1.00</output>
+      <span>Scale</span><input id="align-scale" type="range" min="0.5" max="1.5" step="0.01" value="1" /><output id="align-scale-value" class="alignment-value">1.00</output>
     </label>
-    <button id="alignment-reset-btn" class="alignment-reset" type="button">Reset Alignment</button>
+    <div class="range-settings">
+      <div class="range-settings-title">Slider minimum / maximum</div>
+      <div class="range-setting-row"><span>Horizontal</span><input class="range-input" data-range="horizontal" data-bound="min" type="number" step="0.01" value="-1" /><input class="range-input" data-range="horizontal" data-bound="max" type="number" step="0.01" value="1" /></div>
+      <div class="range-setting-row"><span>Vertical</span><input class="range-input" data-range="vertical" data-bound="min" type="number" step="0.01" value="-1" /><input class="range-input" data-range="vertical" data-bound="max" type="number" step="0.01" value="1" /></div>
+      <div class="range-setting-row"><span>Scale</span><input class="range-input" data-range="scale" data-bound="min" type="number" step="0.01" value="0.5" /><input class="range-input" data-range="scale" data-bound="max" type="number" step="0.01" value="1.5" /></div>
+    </div>
+    <button id="alignment-reset-btn" class="alignment-reset" type="button">Reset Active Mode</button>
   </aside>
 
   <button id="top-controls-toggle-btn" type="button" aria-expanded="true">Hide Top Controls</button>
@@ -335,6 +326,9 @@
 
   const topAlignmentPanel = document.getElementById('top-alignment-panel');
   const topControlsToggleBtn = document.getElementById('top-controls-toggle-btn');
+  const skeletonModeBtn = document.getElementById('skeleton-mode-btn');
+  const imageModeBtn = document.getElementById('image-mode-btn');
+  const alignmentPanelTitle = document.getElementById('alignment-panel-title');
   const alignmentControls = {
     horizontal: document.getElementById('align-horizontal'),
     vertical: document.getElementById('align-vertical'),
@@ -345,23 +339,62 @@
     vertical: document.getElementById('align-vertical-value'),
     scale: document.getElementById('align-scale-value')
   };
-  const skeletonAlignment = { horizontal: 0, vertical: 0, scale: 1 };
+  const modeAlignment = {
+    skeleton: { horizontal: 0, vertical: 0, scale: 1 },
+    image: { horizontal: 0, vertical: 0, scale: 1 }
+  };
+  let alignmentMode = 'skeleton';
 
-  function updateSkeletonAlignment() {
-    skeletonAlignment.horizontal = Number(alignmentControls.horizontal.value);
-    skeletonAlignment.vertical = Number(alignmentControls.vertical.value);
-    skeletonAlignment.scale = Number(alignmentControls.scale.value);
-    alignmentValues.horizontal.textContent = skeletonAlignment.horizontal.toFixed(2);
-    alignmentValues.vertical.textContent = skeletonAlignment.vertical.toFixed(2);
-    alignmentValues.scale.textContent = skeletonAlignment.scale.toFixed(2);
+  function activeAlignment() { return modeAlignment[alignmentMode]; }
+  function updateAlignmentDisplay() {
+    const values = activeAlignment();
+    Object.keys(alignmentControls).forEach(key => {
+      alignmentControls[key].value = values[key];
+      alignmentValues[key].textContent = Number(values[key]).toFixed(2);
+    });
   }
-
-  Object.values(alignmentControls).forEach(control => control.addEventListener('input', updateSkeletonAlignment));
+  function applyImageAlignment() {
+    const values = modeAlignment.image;
+    video.style.transform = `translate(${values.horizontal * 100}%, ${values.vertical * 100}%) scale(${values.scale}) scaleX(-1)`;
+  }
+  function updateActiveAlignment() {
+    const values = activeAlignment();
+    Object.keys(alignmentControls).forEach(key => { values[key] = Number(alignmentControls[key].value); });
+    updateAlignmentDisplay();
+    if (alignmentMode === 'image') applyImageAlignment();
+  }
+  function setAlignmentMode(mode) {
+    alignmentMode = mode;
+    const imageMode = mode === 'image';
+    skeletonModeBtn.classList.toggle('active', !imageMode);
+    imageModeBtn.classList.toggle('active', imageMode);
+    alignmentPanelTitle.textContent = imageMode ? 'Image Alignment' : 'Skeleton Alignment';
+    document.getElementById('alignment-reset-btn').textContent = imageMode ? 'Reset Image' : 'Reset Skeleton';
+    updateAlignmentDisplay();
+  }
+  Object.values(alignmentControls).forEach(control => control.addEventListener('input', updateActiveAlignment));
+  skeletonModeBtn.addEventListener('click', () => setAlignmentMode('skeleton'));
+  imageModeBtn.addEventListener('click', () => setAlignmentMode('image'));
+  document.querySelectorAll('.range-input').forEach(input => {
+    input.addEventListener('change', () => {
+      const control = alignmentControls[input.dataset.range];
+      const minInput = document.querySelector(`.range-input[data-range="${input.dataset.range}"][data-bound="min"]`);
+      const maxInput = document.querySelector(`.range-input[data-range="${input.dataset.range}"][data-bound="max"]`);
+      const min = Number(minInput.value), max = Number(maxInput.value);
+      if (Number.isFinite(min) && Number.isFinite(max) && min < max) {
+        control.min = min;
+        control.max = max;
+        const values = activeAlignment();
+        values[input.dataset.range] = Math.min(max, Math.max(min, values[input.dataset.range]));
+        updateAlignmentDisplay();
+        if (alignmentMode === 'image') applyImageAlignment();
+      }
+    });
+  });
   document.getElementById('alignment-reset-btn').addEventListener('click', () => {
-    alignmentControls.horizontal.value = 0;
-    alignmentControls.vertical.value = 0;
-    alignmentControls.scale.value = 1;
-    updateSkeletonAlignment();
+    modeAlignment[alignmentMode] = { horizontal: 0, vertical: 0, scale: 1 };
+    updateAlignmentDisplay();
+    if (alignmentMode === 'image') applyImageAlignment();
   });
   topControlsToggleBtn.addEventListener('click', () => {
     const hidden = topAlignmentPanel.classList.toggle('hidden');
@@ -882,12 +915,13 @@
       faceSkelLines.visible = true;
     } else faceSkelLines.visible = false;
 
-    handSkelLines.position.set(skeletonAlignment.horizontal, skeletonAlignment.vertical, 0);
-    poseSkelLines.position.set(skeletonAlignment.horizontal, skeletonAlignment.vertical, 0);
-    faceSkelLines.position.set(skeletonAlignment.horizontal, skeletonAlignment.vertical, 0);
-    handSkelLines.scale.setScalar(skeletonAlignment.scale);
-    poseSkelLines.scale.setScalar(skeletonAlignment.scale);
-    faceSkelLines.scale.setScalar(skeletonAlignment.scale);
+    const skeletonValues = modeAlignment.skeleton;
+    handSkelLines.position.set(skeletonValues.horizontal, skeletonValues.vertical, 0);
+    poseSkelLines.position.set(skeletonValues.horizontal, skeletonValues.vertical, 0);
+    faceSkelLines.position.set(skeletonValues.horizontal, skeletonValues.vertical, 0);
+    handSkelLines.scale.setScalar(skeletonValues.scale);
+    poseSkelLines.scale.setScalar(skeletonValues.scale);
+    faceSkelLines.scale.setScalar(skeletonValues.scale);
 
     renderer.render(scene, camera);
   }
