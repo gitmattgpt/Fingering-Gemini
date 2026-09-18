@@ -156,6 +156,68 @@
     .sub-group { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ddd; }
     input[type="checkbox"] { width: 14px; height: 14px; accent-color: #007aff; cursor: pointer; margin: 0; }
     .ball-checkbox { accent-color: #ff9500 !important; }
+
+
+    /* Top slider test: does not alter the existing bottom drawer. */
+    #top-slider-menu {
+      position: absolute;
+      top: 16px;
+      left: min(352px, calc(100vw - 32px));
+      z-index: 11;
+      width: min(380px, calc(100vw - 32px));
+      max-height: 44vh;
+      overflow-y: auto;
+      color: #fff;
+      background: rgba(15, 15, 20, 0.94);
+      backdrop-filter: blur(12px);
+      box-sizing: border-box;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    #top-slider-menu.hidden,
+    #status-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-12px);
+    }
+    #top-slider-menu .tab-bar { justify-content: flex-start; }
+    #top-slider-menu .tab-content { max-height: 28vh; }
+    #top-controls-toggle-btn {
+      position: absolute;
+      top: 178px;
+      left: 16px;
+      z-index: 12;
+      background: rgba(0, 122, 255, 0.9);
+      color: #fff;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+    #top-controls-toggle-btn.controls-hidden { top: 16px; }
+    @media (max-width: 760px) {
+      #top-slider-menu {
+        top: 16px;
+        left: calc(50% + 4px);
+        width: calc(50% - 20px);
+        padding: 10px;
+      }
+      #status-overlay {
+        width: calc(50% - 20px);
+        max-width: none;
+        padding: 10px;
+      }
+      #top-slider-menu .tab-btn { padding: 6px 8px; font-size: 10px; }
+      #top-slider-menu .chip-item { font-size: 11px; }
+      #top-controls-toggle-btn { top: 200px; }
+    }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -188,6 +250,25 @@
       </div>
     </div>
   </div>
+
+  <aside id="top-slider-menu" aria-label="Top slider controls">
+    <div class="tab-bar">
+      <button class="tab-btn active" id="top-tab-btn-hand" type="button">Hand Sliders</button>
+      <button class="tab-btn" id="top-tab-btn-face" type="button">Face Sliders</button>
+      <button class="tab-btn" id="top-tab-btn-body" type="button">Body Sliders</button>
+    </div>
+    <div class="tab-content active" id="top-tab-hand">
+      <div class="chip-item"><label class="sub-group"><input type="checkbox" id="top-toggle-hand-skel" checked /> Hand Skeleton</label></div>
+    </div>
+    <div class="tab-content" id="top-tab-face">
+      <div class="chip-item"><label class="sub-group"><input type="checkbox" id="top-toggle-face-skel" checked /> Face Mesh</label></div>
+    </div>
+    <div class="tab-content" id="top-tab-body">
+      <div class="chip-item"><label class="sub-group"><input type="checkbox" id="top-toggle-pose-skel" checked /> Body Skeleton</label></div>
+    </div>
+  </aside>
+
+  <button id="top-controls-toggle-btn" type="button" aria-expanded="true">Hide Top Controls</button>
 
   <button id="menu-toggle-btn">Show Menu</button>
 
@@ -254,6 +335,41 @@
   menuToggleBtn.addEventListener('click', () => {
     const isOpen = drawer.classList.toggle('open');
     menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
+  });
+
+  const topSliderMenu = document.getElementById('top-slider-menu');
+  const topControlsToggleBtn = document.getElementById('top-controls-toggle-btn');
+  const topSkeletonControls = [
+    ['top-toggle-hand-skel', 'toggle-hand-skel'],
+    ['top-toggle-face-skel', 'toggle-face-skel'],
+    ['top-toggle-pose-skel', 'toggle-pose-skel']
+  ];
+
+  topControlsToggleBtn.addEventListener('click', () => {
+    const hidden = topSliderMenu.classList.toggle('hidden');
+    document.getElementById('status-overlay').classList.toggle('hidden', hidden);
+    topControlsToggleBtn.textContent = hidden ? 'Show Top Controls' : 'Hide Top Controls';
+    topControlsToggleBtn.classList.toggle('controls-hidden', hidden);
+    topControlsToggleBtn.setAttribute('aria-expanded', String(!hidden));
+  });
+
+  [
+    { btn: document.getElementById('top-tab-btn-hand'), content: document.getElementById('top-tab-hand') },
+    { btn: document.getElementById('top-tab-btn-face'), content: document.getElementById('top-tab-face') },
+    { btn: document.getElementById('top-tab-btn-body'), content: document.getElementById('top-tab-body') }
+  ].forEach(({ btn, content }, _, topTabs) => {
+    btn.addEventListener('click', () => {
+      topTabs.forEach(tab => { tab.btn.classList.remove('active'); tab.content.classList.remove('active'); });
+      btn.classList.add('active');
+      content.classList.add('active');
+    });
+  });
+
+  topSkeletonControls.forEach(([topId, existingId]) => {
+    const topCheckbox = document.getElementById(topId);
+    const existingCheckbox = document.getElementById(existingId);
+    topCheckbox.addEventListener('change', () => { existingCheckbox.checked = topCheckbox.checked; });
+    existingCheckbox.addEventListener('change', () => { topCheckbox.checked = existingCheckbox.checked; });
   });
 
   const tabs = [
