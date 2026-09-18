@@ -158,46 +158,26 @@
     .ball-checkbox { accent-color: #ff9500 !important; }
 
 
-    /* Top calibration panel: does not change the existing bottom menu. */
-    #top-alignment-panel {
+    #camera-switch-btn {
       position: absolute;
-      top: 16px;
-      left: min(352px, calc(100vw - 32px));
-      z-index: 11;
-      width: min(300px, calc(100vw - 368px));
-      min-width: 250px;
+      right: 16px;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      z-index: 21;
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      padding: 0;
       color: #fff;
-      background: rgba(15, 15, 20, 0.94);
-      backdrop-filter: blur(12px);
-      box-sizing: border-box;
-      padding: 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.15);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      transition: opacity .25s ease, transform .25s ease;
+      background: rgba(0, 122, 255, 0.9);
+      border: none;
+      border-radius: 50%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      cursor: pointer;
+      backdrop-filter: blur(8px);
     }
-    #top-alignment-panel.hidden, #status-overlay.hidden { opacity: 0; pointer-events: none; transform: translateY(-12px); }
-    .alignment-title { margin: 0 0 8px; font-size: 12px; font-weight: 700; }
-    .mode-switch { display: flex; gap: 6px; margin-bottom: 10px; }
-    .mode-switch button { flex: 1; padding: 6px 8px; border: 1px solid rgba(255,255,255,.25); border-radius: 7px; color: #bbb; background: rgba(255,255,255,.07); cursor: pointer; font-size: 11px; }
-    .mode-switch button.active { color: #fff; background: #007aff; border-color: #007aff; }
-    .alignment-row { display: grid; grid-template-columns: 64px 1fr 44px; align-items: center; gap: 7px; margin: 8px 0; font-size: 11px; }
-    .alignment-row input[type="range"] { width: 100%; accent-color: #007aff; }
-    .alignment-value, .range-input { width: 44px; padding: 4px; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 5px; font-size: 11px; text-align: center; }
-    .range-settings { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.15); }
-    .range-settings-title { margin-bottom: 6px; font-size: 10px; color: #bbb; }
-    .range-setting-row { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 6px; align-items: center; margin: 5px 0; font-size: 10px; }
-    .range-input { width: 100%; }
-    .alignment-reset { width: 100%; margin-top: 10px; padding: 7px 10px; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); border-radius: 7px; cursor: pointer; font-size: 11px; }
-    #top-controls-toggle-btn { position: absolute; top: 178px; left: 16px; z-index: 12; background: rgba(0,122,255,.9); color: #fff; border: none; padding: 10px 22px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,.4); cursor: pointer; backdrop-filter: blur(8px); }
-    #top-controls-toggle-btn.controls-hidden { top: 16px; }
-    @media (max-width: 760px) {
-      #status-overlay { width: calc(50vw - 20px); max-width: none; padding: 10px; }
-      #top-alignment-panel { left: calc(50% + 4px); width: calc(50% - 20px); min-width: 0; padding: 10px; }
-      .alignment-row { grid-template-columns: 52px 1fr 38px; gap: 5px; font-size: 10px; }
-      .alignment-value { width: 38px; font-size: 10px; }
-      #top-controls-toggle-btn { top: 200px; }
-    }
+    #camera-switch-btn:disabled { opacity: .55; cursor: wait; }
+    #camera-switch-btn svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -231,31 +211,14 @@
     </div>
   </div>
 
-  <aside id="top-alignment-panel" aria-label="Alignment controls">
-    <div class="alignment-title" id="alignment-panel-title">Skeleton Alignment</div>
-    <div class="mode-switch" aria-label="Alignment mode">
-      <button id="skeleton-mode-btn" class="active" type="button">Skeleton Mode</button>
-      <button id="image-mode-btn" type="button">Image Mode</button>
-    </div>
-    <label class="alignment-row" for="align-horizontal">
-      <span>Horizontal</span><input id="align-horizontal" type="range" min="-1" max="1" step="0.01" value="0" /><output id="align-horizontal-value" class="alignment-value">0.00</output>
-    </label>
-    <label class="alignment-row" for="align-vertical">
-      <span>Vertical</span><input id="align-vertical" type="range" min="-1" max="1" step="0.01" value="0" /><output id="align-vertical-value" class="alignment-value">0.00</output>
-    </label>
-    <label class="alignment-row" for="align-scale">
-      <span>Scale</span><input id="align-scale" type="range" min="0.5" max="1.5" step="0.01" value="1" /><output id="align-scale-value" class="alignment-value">1.00</output>
-    </label>
-    <div class="range-settings">
-      <div class="range-settings-title">Slider minimum / maximum</div>
-      <div class="range-setting-row"><span>Horizontal</span><input class="range-input" data-range="horizontal" data-bound="min" type="number" step="0.01" value="-1" /><input class="range-input" data-range="horizontal" data-bound="max" type="number" step="0.01" value="1" /></div>
-      <div class="range-setting-row"><span>Vertical</span><input class="range-input" data-range="vertical" data-bound="min" type="number" step="0.01" value="-1" /><input class="range-input" data-range="vertical" data-bound="max" type="number" step="0.01" value="1" /></div>
-      <div class="range-setting-row"><span>Scale</span><input class="range-input" data-range="scale" data-bound="min" type="number" step="0.01" value="0.5" /><input class="range-input" data-range="scale" data-bound="max" type="number" step="0.01" value="1.5" /></div>
-    </div>
-    <button id="alignment-reset-btn" class="alignment-reset" type="button">Reset Active Mode</button>
-  </aside>
-
-  <button id="top-controls-toggle-btn" type="button" aria-expanded="true">Hide Top Controls</button>
+  <button id="camera-switch-btn" type="button" aria-label="Switch camera" title="Switch camera">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
+      <circle cx="12" cy="12.5" r="3" />
+      <path d="M17 10.5a5 5 0 0 1-7.5 5" />
+      <path d="m8 16 .8-2.4 2.4.8" />
+    </svg>
+  </button>
 
   <button id="menu-toggle-btn">Show Menu</button>
 
@@ -312,6 +275,8 @@
   const menuToggleBtn = document.getElementById('menu-toggle-btn');
   const loadingModal = document.getElementById('loading-modal');
   const loadingText = document.getElementById('loading-text');
+  const cameraSwitchBtn = document.getElementById('camera-switch-btn');
+  let cameraFacingMode = 'user';
 
   const badgeHand = document.getElementById('badge-hand');
   const badgeFace = document.getElementById('badge-face');
@@ -322,86 +287,6 @@
   menuToggleBtn.addEventListener('click', () => {
     const isOpen = drawer.classList.toggle('open');
     menuToggleBtn.innerText = isOpen ? "Hide Menu" : "Show Menu";
-  });
-
-  const topAlignmentPanel = document.getElementById('top-alignment-panel');
-  const topControlsToggleBtn = document.getElementById('top-controls-toggle-btn');
-  const skeletonModeBtn = document.getElementById('skeleton-mode-btn');
-  const imageModeBtn = document.getElementById('image-mode-btn');
-  const alignmentPanelTitle = document.getElementById('alignment-panel-title');
-  const alignmentControls = {
-    horizontal: document.getElementById('align-horizontal'),
-    vertical: document.getElementById('align-vertical'),
-    scale: document.getElementById('align-scale')
-  };
-  const alignmentValues = {
-    horizontal: document.getElementById('align-horizontal-value'),
-    vertical: document.getElementById('align-vertical-value'),
-    scale: document.getElementById('align-scale-value')
-  };
-  const modeAlignment = {
-    skeleton: { horizontal: 0, vertical: 0, scale: 1 },
-    image: { horizontal: 0, vertical: 0, scale: 1 }
-  };
-  let alignmentMode = 'skeleton';
-
-  function activeAlignment() { return modeAlignment[alignmentMode]; }
-  function updateAlignmentDisplay() {
-    const values = activeAlignment();
-    Object.keys(alignmentControls).forEach(key => {
-      alignmentControls[key].value = values[key];
-      alignmentValues[key].textContent = Number(values[key]).toFixed(2);
-    });
-  }
-  function applyImageAlignment() {
-    const values = modeAlignment.image;
-    video.style.transform = `translate(${values.horizontal * 100}%, ${values.vertical * 100}%) scale(${values.scale}) scaleX(-1)`;
-  }
-  function updateActiveAlignment() {
-    const values = activeAlignment();
-    Object.keys(alignmentControls).forEach(key => { values[key] = Number(alignmentControls[key].value); });
-    updateAlignmentDisplay();
-    if (alignmentMode === 'image') applyImageAlignment();
-  }
-  function setAlignmentMode(mode) {
-    alignmentMode = mode;
-    const imageMode = mode === 'image';
-    skeletonModeBtn.classList.toggle('active', !imageMode);
-    imageModeBtn.classList.toggle('active', imageMode);
-    alignmentPanelTitle.textContent = imageMode ? 'Image Alignment' : 'Skeleton Alignment';
-    document.getElementById('alignment-reset-btn').textContent = imageMode ? 'Reset Image' : 'Reset Skeleton';
-    updateAlignmentDisplay();
-  }
-  Object.values(alignmentControls).forEach(control => control.addEventListener('input', updateActiveAlignment));
-  skeletonModeBtn.addEventListener('click', () => setAlignmentMode('skeleton'));
-  imageModeBtn.addEventListener('click', () => setAlignmentMode('image'));
-  document.querySelectorAll('.range-input').forEach(input => {
-    input.addEventListener('change', () => {
-      const control = alignmentControls[input.dataset.range];
-      const minInput = document.querySelector(`.range-input[data-range="${input.dataset.range}"][data-bound="min"]`);
-      const maxInput = document.querySelector(`.range-input[data-range="${input.dataset.range}"][data-bound="max"]`);
-      const min = Number(minInput.value), max = Number(maxInput.value);
-      if (Number.isFinite(min) && Number.isFinite(max) && min < max) {
-        control.min = min;
-        control.max = max;
-        const values = activeAlignment();
-        values[input.dataset.range] = Math.min(max, Math.max(min, values[input.dataset.range]));
-        updateAlignmentDisplay();
-        if (alignmentMode === 'image') applyImageAlignment();
-      }
-    });
-  });
-  document.getElementById('alignment-reset-btn').addEventListener('click', () => {
-    modeAlignment[alignmentMode] = { horizontal: 0, vertical: 0, scale: 1 };
-    updateAlignmentDisplay();
-    if (alignmentMode === 'image') applyImageAlignment();
-  });
-  topControlsToggleBtn.addEventListener('click', () => {
-    const hidden = topAlignmentPanel.classList.toggle('hidden');
-    document.getElementById('status-overlay').classList.toggle('hidden', hidden);
-    topControlsToggleBtn.textContent = hidden ? 'Show Top Controls' : 'Hide Top Controls';
-    topControlsToggleBtn.classList.toggle('controls-hidden', hidden);
-    topControlsToggleBtn.setAttribute('aria-expanded', String(!hidden));
   });
 
   const tabs = [
@@ -678,6 +563,42 @@
     return dist < PINCH_THRESHOLD;
   }
 
+  function stopCameraStream() {
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+    }
+  }
+
+  async function startCameraStream(facingMode) {
+    stopCameraStream();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    cameraFacingMode = facingMode;
+    video.srcObject = stream;
+    video.style.transform = 'scaleX(-1)';
+    await video.play();
+  }
+
+  cameraSwitchBtn.addEventListener('click', async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      statusText.innerText = 'Error: Camera switching is not supported.';
+      return;
+    }
+    cameraSwitchBtn.disabled = true;
+    const nextFacingMode = cameraFacingMode === 'user' ? 'environment' : 'user';
+    try {
+      await startCameraStream(nextFacingMode);
+      statusText.innerText = `Camera: ${nextFacingMode === 'user' ? 'Front' : 'Back'}`;
+    } catch (err) {
+      statusText.innerText = 'Error switching camera: ' + err.message;
+      try { await startCameraStream(cameraFacingMode); } catch (_) {}
+    } finally {
+      cameraSwitchBtn.disabled = false;
+    }
+  });
+
   async function startApp() {
     activeEngine = engineSelect.value;
     startBtn.style.display = 'none';
@@ -687,11 +608,7 @@
 
     try {
       if (!video.srcObject) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        video.srcObject = stream;
-        await video.play();
+        await startCameraStream(cameraFacingMode);
       }
 
       loadingText.innerText = "Loading Vision Engine...";
@@ -914,14 +831,6 @@
       posAttr.needsUpdate = true;
       faceSkelLines.visible = true;
     } else faceSkelLines.visible = false;
-
-    const skeletonValues = modeAlignment.skeleton;
-    handSkelLines.position.set(skeletonValues.horizontal, skeletonValues.vertical, 0);
-    poseSkelLines.position.set(skeletonValues.horizontal, skeletonValues.vertical, 0);
-    faceSkelLines.position.set(skeletonValues.horizontal, skeletonValues.vertical, 0);
-    handSkelLines.scale.setScalar(skeletonValues.scale);
-    poseSkelLines.scale.setScalar(skeletonValues.scale);
-    faceSkelLines.scale.setScalar(skeletonValues.scale);
 
     renderer.render(scene, camera);
   }
