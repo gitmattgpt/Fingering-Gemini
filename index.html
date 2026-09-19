@@ -7,7 +7,7 @@
     content="width=device-width, initial-scale=1.0, user-scalable=no"
   />
 
-  <title>3D Dual-Engine Tracking - Matched Camera Alignment</title>
+  <title>3D Dual-Engine Tracking - Camera Switch</title>
 
   <style>
     :root {
@@ -32,11 +32,6 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    /*
-      Both camera and Three.js canvas occupy exactly the same stage.
-      The video still uses object-fit: cover, and JavaScript applies the
-      same cover calculation to MediaPipe landmarks.
-    */
     #stage {
       position: fixed;
       inset: 0;
@@ -50,8 +45,19 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1);
       background: #111;
+    }
+
+    /*
+      The front-facing camera is mirrored.
+      The rear camera is displayed normally.
+    */
+    #webcam.front-camera {
+      transform: scaleX(-1);
+    }
+
+    #webcam.rear-camera {
+      transform: none;
     }
 
     #canvas-container {
@@ -68,7 +74,7 @@
       height: 100%;
     }
 
-    /* Top panels */
+    /* Top controls */
 
     #top-controls {
       position: absolute;
@@ -162,6 +168,11 @@
       cursor: pointer;
     }
 
+    #start-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
     #status-text {
       margin-top: 8px;
       font-weight: 500;
@@ -208,7 +219,7 @@
       background: rgba(255, 255, 255, 0.15);
     }
 
-    /* Alignment panel */
+    /* Alignment controls */
 
     .alignment-description {
       margin-bottom: 12px;
@@ -294,7 +305,7 @@
       background: rgba(255, 255, 255, 0.2);
     }
 
-    /* Panel visibility buttons */
+    /* Panel show/hide controls */
 
     #panel-toggle-controls {
       position: absolute;
@@ -321,6 +332,109 @@
 
     #panel-toggle-controls button:hover {
       background: rgba(0, 122, 255, 0.8);
+    }
+
+    /* Camera switch button */
+
+    #camera-switch-btn {
+      position: absolute;
+      right: 18px;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      z-index: 45;
+
+      width: 64px;
+      height: 64px;
+      padding: 0;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      color: #fff;
+      background: rgba(0, 122, 255, 0.94);
+      border: 2px solid rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+
+      box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.45),
+        0 0 0 3px rgba(0, 0, 0, 0.2);
+
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    #camera-switch-btn:hover {
+      background: rgba(0, 122, 255, 1);
+    }
+
+    #camera-switch-btn:active {
+      transform: scale(0.92);
+    }
+
+    #camera-switch-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .camera-switch-arrow {
+      position: absolute;
+      inset: 3px;
+
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 47px;
+      line-height: 39px;
+      font-weight: 400;
+      pointer-events: none;
+    }
+
+    .camera-switch-icon {
+      position: relative;
+      z-index: 2;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      width: 29px;
+      height: 22px;
+
+      color: transparent;
+      background: var(--blue);
+      border: 2px solid #fff;
+      border-radius: 5px;
+      pointer-events: none;
+    }
+
+    .camera-switch-icon::before {
+      content: "";
+      position: absolute;
+      top: -6px;
+      left: 7px;
+
+      width: 10px;
+      height: 6px;
+
+      background: var(--blue);
+      border: 2px solid #fff;
+      border-bottom: none;
+      border-radius: 3px 3px 0 0;
+    }
+
+    .camera-switch-icon::after {
+      content: "";
+      position: absolute;
+
+      width: 8px;
+      height: 8px;
+
+      background: var(--blue);
+      border: 2px solid #fff;
+      border-radius: 50%;
     }
 
     /* Loading modal */
@@ -487,6 +601,11 @@
         width: min(360px, calc(100vw - 32px));
         max-width: none;
       }
+
+      #camera-switch-btn {
+        right: 14px;
+        bottom: calc(14px + env(safe-area-inset-bottom));
+      }
     }
   </style>
 
@@ -503,7 +622,12 @@
     <div id="status-overlay">
       <div class="panel-header">
         <span>Tracking Status</span>
-        <button class="hide-panel-btn" id="hide-status-btn">
+
+        <button
+          class="hide-panel-btn"
+          id="hide-status-btn"
+          type="button"
+        >
           Hide
         </button>
       </div>
@@ -512,12 +636,13 @@
         <option value="precision">
           Mode: Precision (Hand & Face)
         </option>
+
         <option value="holistic">
           Mode: Full Body (Holistic)
         </option>
       </select>
 
-      <button id="start-btn">
+      <button id="start-btn" type="button">
         Start Tracking Engine
       </button>
 
@@ -538,6 +663,7 @@
         style="margin-top: 8px; display: none;"
       >
         Active Tracking:
+
         <div style="margin-top: 4px;">
           <span id="badge-hand" class="detect-badge badge-off">
             HAND
@@ -557,21 +683,29 @@
     <div id="alignment-panel">
       <div class="panel-header">
         <span>Manual Alignment</span>
-        <button class="hide-panel-btn" id="hide-alignment-btn">
+
+        <button
+          class="hide-panel-btn"
+          id="hide-alignment-btn"
+          type="button"
+        >
           Hide
         </button>
       </div>
 
       <div class="alignment-description">
-        These controls apply after the camera crop mapping.
         Positive horizontal values move the overlay right.
-        Positive vertical values move the overlay down.
+        Positive vertical values move it down.
+        Scale is centered around the middle of the screen.
       </div>
 
       <div class="alignment-row">
         <div class="alignment-label">
           <span>Horizontal</span>
-          <span id="horizontal-display" class="alignment-value">
+          <span
+            id="horizontal-display"
+            class="alignment-value"
+          >
             0
           </span>
         </div>
@@ -593,6 +727,7 @@
             type="number"
             step="0.001"
             value="0"
+            aria-label="Horizontal current value"
           />
         </div>
 
@@ -605,6 +740,7 @@
             type="number"
             step="0.001"
             value="-0.25"
+            aria-label="Horizontal minimum"
           />
 
           <span>Max</span>
@@ -615,6 +751,7 @@
             type="number"
             step="0.001"
             value="0.25"
+            aria-label="Horizontal maximum"
           />
         </div>
       </div>
@@ -622,7 +759,10 @@
       <div class="alignment-row">
         <div class="alignment-label">
           <span>Vertical</span>
-          <span id="vertical-display" class="alignment-value">
+          <span
+            id="vertical-display"
+            class="alignment-value"
+          >
             0
           </span>
         </div>
@@ -644,6 +784,7 @@
             type="number"
             step="0.001"
             value="0"
+            aria-label="Vertical current value"
           />
         </div>
 
@@ -656,6 +797,7 @@
             type="number"
             step="0.001"
             value="-0.25"
+            aria-label="Vertical minimum"
           />
 
           <span>Max</span>
@@ -666,6 +808,7 @@
             type="number"
             step="0.001"
             value="0.25"
+            aria-label="Vertical maximum"
           />
         </div>
       </div>
@@ -673,7 +816,10 @@
       <div class="alignment-row">
         <div class="alignment-label">
           <span>Scale</span>
-          <span id="scale-display" class="alignment-value">
+          <span
+            id="scale-display"
+            class="alignment-value"
+          >
             1
           </span>
         </div>
@@ -695,6 +841,7 @@
             type="number"
             step="0.001"
             value="1"
+            aria-label="Scale current value"
           />
         </div>
 
@@ -707,6 +854,7 @@
             type="number"
             step="0.001"
             value="0.5"
+            aria-label="Scale minimum"
           />
 
           <span>Max</span>
@@ -717,16 +865,23 @@
             type="number"
             step="0.001"
             value="1.5"
+            aria-label="Scale maximum"
           />
         </div>
       </div>
 
       <div class="alignment-buttons">
-        <button id="reset-alignment-btn">
+        <button
+          id="reset-alignment-btn"
+          type="button"
+        >
           Reset Values
         </button>
 
-        <button id="clear-saved-btn">
+        <button
+          id="clear-saved-btn"
+          type="button"
+        >
           Clear Saved
         </button>
       </div>
@@ -734,42 +889,72 @@
   </div>
 
   <div id="panel-toggle-controls">
-    <button id="show-status-btn">
+    <button id="show-status-btn" type="button">
       Show Status
     </button>
 
-    <button id="show-alignment-btn">
+    <button id="show-alignment-btn" type="button">
       Show Alignment
     </button>
   </div>
 
+  <!-- Camera switch button -->
+  <button
+    id="camera-switch-btn"
+    type="button"
+    aria-label="Switch to rear camera"
+    title="Switch to rear camera"
+  >
+    <span class="camera-switch-arrow">↻</span>
+    <span class="camera-switch-icon"></span>
+  </button>
+
   <div id="loading-modal">
     <div class="spinner"></div>
+
     <div id="loading-text">
       Loading Model...
     </div>
   </div>
 
-  <button id="menu-toggle-btn">
+  <button
+    id="menu-toggle-btn"
+    type="button"
+  >
     Show Menu
   </button>
 
   <div id="control-drawer">
     <div class="tab-bar">
-      <button class="tab-btn active" id="tab-btn-hand">
+      <button
+        class="tab-btn active"
+        id="tab-btn-hand"
+        type="button"
+      >
         Hand Targets
       </button>
 
-      <button class="tab-btn" id="tab-btn-face">
+      <button
+        class="tab-btn"
+        id="tab-btn-face"
+        type="button"
+      >
         Face Targets
       </button>
 
-      <button class="tab-btn" id="tab-btn-body">
+      <button
+        class="tab-btn"
+        id="tab-btn-body"
+        type="button"
+      >
         Body Targets
       </button>
     </div>
 
-    <div class="tab-content active" id="tab-hand">
+    <div
+      class="tab-content active"
+      id="tab-hand"
+    >
       <div class="chip-item">
         <label class="sub-group">
           <input
@@ -782,7 +967,10 @@
       </div>
     </div>
 
-    <div class="tab-content" id="tab-face">
+    <div
+      class="tab-content"
+      id="tab-face"
+    >
       <div class="chip-item">
         <label class="sub-group">
           <input
@@ -795,7 +983,10 @@
       </div>
     </div>
 
-    <div class="tab-content" id="tab-body">
+    <div
+      class="tab-content"
+      id="tab-body"
+    >
       <div class="chip-item">
         <label class="sub-group">
           <input
@@ -824,7 +1015,7 @@
     */
 
     const ALIGNMENT_STORAGE_KEY =
-      "tracking-alignment-settings-v2";
+      "tracking-alignment-settings-v3";
 
     const alignment = {
       horizontal: 0,
@@ -837,6 +1028,16 @@
       vertical: 0,
       scale: 1
     };
+
+    /*
+      ============================================================
+      CAMERA STATE
+      ============================================================
+    */
+
+    let currentFacingMode = "user";
+    let currentStream = null;
+    let isSwitchingCamera = false;
 
     /*
       ============================================================
@@ -892,6 +1093,9 @@
     const alignmentPanel =
       document.getElementById("alignment-panel");
 
+    const cameraSwitchBtn =
+      document.getElementById("camera-switch-btn");
+
     /*
       ============================================================
       PANEL TOGGLES
@@ -924,7 +1128,7 @@
 
     /*
       ============================================================
-      ALIGNMENT CONTROL SETUP
+      ALIGNMENT CONTROLS
       ============================================================
     */
 
@@ -1250,6 +1454,207 @@
 
     /*
       ============================================================
+      CAMERA FUNCTIONS
+      ============================================================
+    */
+
+    function updateCameraAppearance() {
+      const isFrontCamera =
+        currentFacingMode === "user";
+
+      video.classList.toggle(
+        "front-camera",
+        isFrontCamera
+      );
+
+      video.classList.toggle(
+        "rear-camera",
+        !isFrontCamera
+      );
+
+      cameraSwitchBtn.setAttribute(
+        "aria-label",
+        isFrontCamera
+          ? "Switch to rear camera"
+          : "Switch to front camera"
+      );
+
+      cameraSwitchBtn.setAttribute(
+        "title",
+        isFrontCamera
+          ? "Switch to rear camera"
+          : "Switch to front camera"
+      );
+    }
+
+    async function startCamera(
+      facingMode
+    ) {
+      if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+      ) {
+        throw new Error(
+          "Camera access is not supported."
+        );
+      }
+
+      /*
+        Stop the existing stream before opening
+        the other camera. This is important on iPhone.
+      */
+      if (currentStream) {
+        currentStream
+          .getTracks()
+          .forEach(track => {
+            track.stop();
+          });
+
+        currentStream = null;
+      }
+
+      if (video.srcObject) {
+        video.srcObject = null;
+      }
+
+      const requestedConstraints = {
+        audio: false,
+        video: {
+          facingMode,
+          width: {
+            ideal: 1280
+          },
+          height: {
+            ideal: 720
+          }
+        }
+      };
+
+      let stream;
+
+      try {
+        stream =
+          await navigator.mediaDevices
+            .getUserMedia(
+              requestedConstraints
+            );
+      } catch (error) {
+        console.warn(
+          `Could not open ${facingMode} camera. Trying fallback.`,
+          error
+        );
+
+        stream =
+          await navigator.mediaDevices
+            .getUserMedia({
+              audio: false,
+              video: true
+            });
+      }
+
+      currentStream =
+        stream;
+
+      video.srcObject =
+        currentStream;
+
+      await video.play();
+
+      await new Promise(resolve => {
+        if (
+          video.readyState >= 1 &&
+          video.videoWidth > 0
+        ) {
+          resolve();
+        } else {
+          video.onloadedmetadata =
+            resolve;
+        }
+      });
+
+      currentFacingMode =
+        facingMode;
+
+      updateCameraAppearance();
+
+      console.log(
+        "Camera started:",
+        {
+          requestedFacingMode:
+            facingMode,
+          videoWidth:
+            video.videoWidth,
+          videoHeight:
+            video.videoHeight,
+          settings:
+            currentStream
+              .getVideoTracks()[0]
+              .getSettings()
+        }
+      );
+    }
+
+    cameraSwitchBtn.addEventListener(
+      "click",
+      async () => {
+        if (
+          isSwitchingCamera ||
+          !currentStream
+        ) {
+          return;
+        }
+
+        isSwitchingCamera =
+          true;
+
+        cameraSwitchBtn.disabled =
+          true;
+
+        startBtn.disabled =
+          true;
+
+        const nextFacingMode =
+          currentFacingMode === "user"
+            ? "environment"
+            : "user";
+
+        statusText.innerText =
+          nextFacingMode ===
+          "environment"
+            ? "Switching to rear camera..."
+            : "Switching to front camera...";
+
+        try {
+          await startCamera(
+            nextFacingMode
+          );
+
+          statusText.innerText =
+            `Tracking Active (${activeEngine.toUpperCase()})`;
+        } catch (error) {
+          console.error(
+            "Camera switch failed:",
+            error
+          );
+
+          statusText.innerText =
+            "Camera switch failed: " +
+            error.message;
+        } finally {
+          isSwitchingCamera =
+            false;
+
+          cameraSwitchBtn.disabled =
+            false;
+
+          startBtn.disabled =
+            false;
+        }
+      }
+    );
+
+    /*
+      ============================================================
       TRACKING CONFIGURATION
       ============================================================
     */
@@ -1538,38 +1943,62 @@
       [109, 10]
     ];
 
-    let currentBallTargetId = "index";
+    let currentBallTargetId =
+      "index";
 
-    const PROXIMITY_TRANSFER_THRESHOLD = 0.20;
-    const PINCH_THRESHOLD = 0.055;
+    const PROXIMITY_TRANSFER_THRESHOLD =
+      0.20;
 
-    let holisticLandmarker = null;
-    let handLandmarker = null;
-    let faceLandmarker = null;
-    let activeEngine = "precision";
-    let lastVideoTime = -1;
+    const PINCH_THRESHOLD =
+      0.055;
 
-    const LERP_FACTOR = 0.35;
-    const TARGET_SCALE = 0.12;
-    const SCALE_SPEED = 0.08;
-    const UNPROJECT_DISTANCE = 1.8;
+    let holisticLandmarker =
+      null;
+
+    let handLandmarker =
+      null;
+
+    let faceLandmarker =
+      null;
+
+    let activeEngine =
+      "precision";
+
+    let lastVideoTime =
+      -1;
+
+    const LERP_FACTOR =
+      0.35;
+
+    const TARGET_SCALE =
+      0.12;
+
+    const SCALE_SPEED =
+      0.08;
+
+    const UNPROJECT_DISTANCE =
+      1.8;
 
     /*
       ============================================================
-      THREE.JS SETUP
+      THREE.JS
       ============================================================
     */
 
-    const scene = new THREE.Scene();
+    const scene =
+      new THREE.Scene();
 
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    const camera =
+      new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth /
+          window.innerHeight,
+        0.1,
+        1000
+      );
 
-    camera.position.z = 2;
+    camera.position.z =
+      2;
 
     const renderer =
       new THREE.WebGLRenderer({
@@ -1583,7 +2012,10 @@
     );
 
     renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio, 2)
+      Math.min(
+        window.devicePixelRatio,
+        2
+      )
     );
 
     container.appendChild(
@@ -1596,24 +2028,31 @@
     const _dir =
       new THREE.Vector3();
 
-    /*
-      ============================================================
-      TRACKER POINTS
-      ============================================================
-    */
+    const trackers =
+      {};
 
-    const trackers = {};
-
-    function registerPoints(pointsList) {
+    function registerPoints(
+      pointsList
+    ) {
       pointsList.forEach(point => {
-        const mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          new THREE.MeshBasicMaterial({
-            color: point.color
-          })
+        const mesh =
+          new THREE.Mesh(
+            new THREE.BoxGeometry(
+              1,
+              1,
+              1
+            ),
+            new THREE.MeshBasicMaterial({
+              color: point.color
+            })
+          );
+
+        mesh.scale.set(
+          0,
+          0,
+          0
         );
 
-        mesh.scale.set(0, 0, 0);
         scene.add(mesh);
 
         trackers[point.id] = {
@@ -1624,16 +2063,26 @@
           landmark: point.landmark,
           category: point.category,
           active: false,
-          currentPos: new THREE.Vector3(),
-          targetPos: new THREE.Vector3(),
+          currentPos:
+            new THREE.Vector3(),
+          targetPos:
+            new THREE.Vector3(),
           scale: 0
         };
       });
     }
 
-    registerPoints(HAND_POINTS);
-    registerPoints(FACE_POINTS);
-    registerPoints(BODY_POINTS);
+    registerPoints(
+      HAND_POINTS
+    );
+
+    registerPoints(
+      FACE_POINTS
+    );
+
+    registerPoints(
+      BODY_POINTS
+    );
 
     /*
       ============================================================
@@ -1642,17 +2091,24 @@
     */
 
     function createProceduralButterfly() {
-      const butterflyGroup =
+      const group =
         new THREE.Group();
 
       const textureCanvas =
-        document.createElement("canvas");
+        document.createElement(
+          "canvas"
+        );
 
-      textureCanvas.width = 256;
-      textureCanvas.height = 256;
+      textureCanvas.width =
+        256;
+
+      textureCanvas.height =
+        256;
 
       const ctx =
-        textureCanvas.getContext("2d");
+        textureCanvas.getContext(
+          "2d"
+        );
 
       ctx.clearRect(
         0,
@@ -1686,9 +2142,15 @@
         "#5856d6"
       );
 
-      ctx.fillStyle = gradient;
+      ctx.fillStyle =
+        gradient;
+
       ctx.beginPath();
-      ctx.moveTo(10, 128);
+      ctx.moveTo(
+        10,
+        128
+      );
+
       ctx.bezierCurveTo(
         20,
         20,
@@ -1697,6 +2159,7 @@
         240,
         100
       );
+
       ctx.bezierCurveTo(
         250,
         180,
@@ -1705,6 +2168,7 @@
         100,
         240
       );
+
       ctx.bezierCurveTo(
         20,
         220,
@@ -1713,20 +2177,47 @@
         10,
         128
       );
+
       ctx.closePath();
       ctx.fill();
 
       ctx.strokeStyle =
-        "rgba(0, 0, 0, 0.7)";
+        "rgba(0,0,0,0.7)";
 
-      ctx.lineWidth = 3;
+      ctx.lineWidth =
+        3;
+
       ctx.beginPath();
-      ctx.moveTo(10, 128);
-      ctx.lineTo(200, 90);
-      ctx.moveTo(10, 128);
-      ctx.lineTo(180, 160);
-      ctx.moveTo(10, 128);
-      ctx.lineTo(120, 210);
+      ctx.moveTo(
+        10,
+        128
+      );
+
+      ctx.lineTo(
+        200,
+        90
+      );
+
+      ctx.moveTo(
+        10,
+        128
+      );
+
+      ctx.lineTo(
+        180,
+        160
+      );
+
+      ctx.moveTo(
+        10,
+        128
+      );
+
+      ctx.lineTo(
+        120,
+        210
+      );
+
       ctx.stroke();
 
       const wingTexture =
@@ -1793,18 +2284,26 @@
           roughness: 0.8
         });
 
-      const bodyMesh =
+      const body =
         new THREE.Mesh(
           bodyGeometry,
           bodyMaterial
         );
 
-      butterflyGroup.add(leftWing);
-      butterflyGroup.add(rightWing);
-      butterflyGroup.add(bodyMesh);
+      group.add(
+        leftWing
+      );
+
+      group.add(
+        rightWing
+      );
+
+      group.add(
+        body
+      );
 
       return {
-        group: butterflyGroup,
+        group,
         leftWing,
         rightWing
       };
@@ -1816,8 +2315,15 @@
     const ballMesh =
       butterfly.group;
 
-    ballMesh.scale.set(0, 0, 0);
-    scene.add(ballMesh);
+    ballMesh.scale.set(
+      0,
+      0,
+      0
+    );
+
+    scene.add(
+      ballMesh
+    );
 
     const light =
       new THREE.DirectionalLight(
@@ -1825,8 +2331,15 @@
         1.4
       );
 
-    light.position.set(1, 2, 3);
-    scene.add(light);
+    light.position.set(
+      1,
+      2,
+      3
+    );
+
+    scene.add(
+      light
+    );
 
     scene.add(
       new THREE.AmbientLight(
@@ -1835,12 +2348,14 @@
       )
     );
 
-    let ballScale = 0;
+    let ballScale =
+      0;
 
     const ballPos =
       new THREE.Vector3();
 
-    let isPinched = false;
+    let isPinched =
+      false;
 
     const pinchPosition =
       new THREE.Vector3();
@@ -1874,7 +2389,9 @@
         })
       );
 
-    scene.add(handSkelLines);
+    scene.add(
+      handSkelLines
+    );
 
     const poseSkelGeom =
       new THREE.BufferGeometry();
@@ -1899,7 +2416,9 @@
         })
       );
 
-    scene.add(poseSkelLines);
+    scene.add(
+      poseSkelLines
+    );
 
     const faceSkelGeom =
       new THREE.BufferGeometry();
@@ -1924,26 +2443,39 @@
         })
       );
 
-    scene.add(faceSkelLines);
+    scene.add(
+      faceSkelLines
+    );
 
     const handWorldPositions =
       new Array(21)
         .fill(null)
-        .map(() => new THREE.Vector3());
+        .map(
+          () => new THREE.Vector3()
+        );
 
     const faceWorldPositions =
       new Array(478)
         .fill(null)
-        .map(() => new THREE.Vector3());
+        .map(
+          () => new THREE.Vector3()
+        );
 
     const poseWorldPositions =
       new Array(33)
         .fill(null)
-        .map(() => new THREE.Vector3());
+        .map(
+          () => new THREE.Vector3()
+        );
 
-    let handVisible = false;
-    let faceVisible = false;
-    let poseVisible = false;
+    let handVisible =
+      false;
+
+    let faceVisible =
+      false;
+
+    let poseVisible =
+      false;
 
     /*
       ============================================================
@@ -1952,105 +2484,143 @@
     */
 
     function buildUI() {
-      const createChip = (
-        point,
-        targetContainer
-      ) => {
-        const chip =
-          document.createElement("div");
+      const createChip =
+        (
+          point,
+          targetContainer
+        ) => {
+          const chip =
+            document.createElement(
+              "div"
+            );
 
-        chip.className =
-          "chip-item";
+          chip.className =
+            "chip-item";
 
-        chip.innerHTML = `
-          <span
-            class="chip-dot"
-            style="background:${point.color}"
-          ></span>
+          chip.innerHTML = `
+            <span
+              class="chip-dot"
+              style="background:${point.color}"
+            ></span>
 
-          <label class="sub-group">
-            <input
-              type="checkbox"
-              class="show-chk"
-              id="show-${point.id}"
-              ${point.defaultShow ? "checked" : ""}
-            />
-            ${point.label}
-          </label>
+            <label class="sub-group">
+              <input
+                type="checkbox"
+                class="show-chk"
+                id="show-${point.id}"
+                ${point.defaultShow ? "checked" : ""}
+              />
+              ${point.label}
+            </label>
 
-          <label
-            class="sub-group"
-            style="
-              margin-left:6px;
-              border-left:1px solid #444;
-              padding-left:6px;
-            "
-          >
-            <input
-              type="checkbox"
-              class="ball-checkbox"
-              id="ball-${point.id}"
-              ${point.id === currentBallTargetId ? "checked" : ""}
-            />
-            Ball
-          </label>
-        `;
+            <label
+              class="sub-group"
+              style="
+                margin-left:6px;
+                border-left:1px solid #444;
+                padding-left:6px;
+              "
+            >
+              <input
+                type="checkbox"
+                class="ball-checkbox"
+                id="ball-${point.id}"
+                ${
+                  point.id ===
+                  currentBallTargetId
+                    ? "checked"
+                    : ""
+                }
+              />
+              Ball
+            </label>
+          `;
 
-        targetContainer.appendChild(chip);
-
-        chip
-          .querySelector(".show-chk")
-          .addEventListener(
-            "change",
-            event => {
-              trackers[point.id].enabled =
-                event.target.checked;
-            }
+          targetContainer.appendChild(
+            chip
           );
 
-        chip
-          .querySelector(".ball-checkbox")
-          .addEventListener(
-            "change",
-            event => {
-              if (event.target.checked) {
-                setBallTarget(point.id);
-              } else if (
-                currentBallTargetId === point.id
-              ) {
-                event.target.checked = true;
+          chip
+            .querySelector(
+              ".show-chk"
+            )
+            .addEventListener(
+              "change",
+              event => {
+                trackers[
+                  point.id
+                ].enabled =
+                  event.target.checked;
               }
-            }
+            );
+
+          chip
+            .querySelector(
+              ".ball-checkbox"
+            )
+            .addEventListener(
+              "change",
+              event => {
+                if (
+                  event.target.checked
+                ) {
+                  setBallTarget(
+                    point.id
+                  );
+                } else if (
+                  currentBallTargetId ===
+                  point.id
+                ) {
+                  event.target.checked =
+                    true;
+                }
+              }
+            );
+        };
+
+      HAND_POINTS.forEach(
+        point => {
+          createChip(
+            point,
+            document.getElementById(
+              "tab-hand"
+            )
           );
-      };
+        }
+      );
 
-      HAND_POINTS.forEach(point => {
-        createChip(
-          point,
-          document.getElementById("tab-hand")
-        );
-      });
+      FACE_POINTS.forEach(
+        point => {
+          createChip(
+            point,
+            document.getElementById(
+              "tab-face"
+            )
+          );
+        }
+      );
 
-      FACE_POINTS.forEach(point => {
-        createChip(
-          point,
-          document.getElementById("tab-face")
-        );
-      });
-
-      BODY_POINTS.forEach(point => {
-        createChip(
-          point,
-          document.getElementById("tab-body")
-        );
-      });
+      BODY_POINTS.forEach(
+        point => {
+          createChip(
+            point,
+            document.getElementById(
+              "tab-body"
+            )
+          );
+        }
+      );
     }
 
-    function setBallTarget(targetId) {
+    function setBallTarget(
+      targetId
+    ) {
       currentBallTargetId =
         targetId;
 
-      Object.keys(trackers).forEach(id => {
+      Object.keys(
+        trackers
+      ).forEach(id => {
         const checkbox =
           document.getElementById(
             `ball-${id}`
@@ -2069,16 +2639,6 @@
       ============================================================
       CAMERA COVER GEOMETRY
       ============================================================
-
-      This matches CSS object-fit: cover.
-
-      It calculates the displayed camera image rectangle:
-      - renderedWidth
-      - renderedHeight
-      - offsetX
-      - offsetY
-
-      The same values are used for landmark mapping.
     */
 
     function getCoverGeometry() {
@@ -2114,17 +2674,20 @@
         sourceHeight * scale;
 
       const offsetX =
-        (viewWidth - renderedWidth) / 2;
+        (viewWidth -
+          renderedWidth) /
+        2;
 
       const offsetY =
-        (viewHeight - renderedHeight) / 2;
+        (viewHeight -
+          renderedHeight) /
+        2;
 
       return {
         viewWidth,
         viewHeight,
         sourceWidth,
         sourceHeight,
-        scale,
         renderedWidth,
         renderedHeight,
         offsetX,
@@ -2134,7 +2697,7 @@
 
     /*
       ============================================================
-      LANDMARK MAPPING
+      LANDMARK TO WORLD
       ============================================================
     */
 
@@ -2146,16 +2709,13 @@
         getCoverGeometry();
 
       if (!cover) {
-        return outVec.set(0, 0, 0);
+        return outVec.set(
+          0,
+          0,
+          0
+        );
       }
 
-      /*
-        MediaPipe landmarks are normalized against
-        the original camera frame.
-
-        First convert to the displayed object-fit: cover
-        rectangle.
-      */
       const unmirroredScreenX =
         landmark.x *
           cover.renderedWidth +
@@ -2166,27 +2726,25 @@
           cover.renderedHeight +
         cover.offsetY;
 
-      /*
-        The video is mirrored with:
-          transform: scaleX(-1)
+      const isFrontCamera =
+        currentFacingMode ===
+        "user";
 
-        Mirror the x coordinate around the
-        visible viewport.
+      /*
+        Front camera:
+          Video is visually mirrored.
+          Landmark x is mirrored too.
+
+        Rear camera:
+          Video is normal.
+          Landmark x is not mirrored.
       */
       const baseScreenX =
-        cover.viewWidth -
-        unmirroredScreenX;
+        isFrontCamera
+          ? cover.viewWidth -
+            unmirroredScreenX
+          : unmirroredScreenX;
 
-      /*
-        Apply manual alignment after camera crop
-        and mirror correction.
-
-        horizontal and vertical use screen fractions.
-        Positive horizontal = right.
-        Positive vertical = down.
-
-        Scale is applied around screen center.
-      */
       const centeredX =
         baseScreenX -
         cover.viewWidth / 2;
@@ -2197,13 +2755,15 @@
 
       const adjustedScreenX =
         cover.viewWidth / 2 +
-        centeredX * alignment.scale +
+        centeredX *
+          alignment.scale +
         alignment.horizontal *
           cover.viewWidth;
 
       const adjustedScreenY =
         cover.viewHeight / 2 +
-        centeredY * alignment.scale +
+        centeredY *
+          alignment.scale +
         alignment.vertical *
           cover.viewHeight;
 
@@ -2225,27 +2785,29 @@
         0.5
       );
 
-      _ndc.unproject(camera);
+      _ndc.unproject(
+        camera
+      );
 
       _dir
         .copy(_ndc)
         .sub(camera.position)
         .normalize();
 
-      outVec.copy(
-        camera.position
-      ).add(
-        _dir.multiplyScalar(
-          UNPROJECT_DISTANCE
-        )
-      );
+      outVec
+        .copy(camera.position)
+        .add(
+          _dir.multiplyScalar(
+            UNPROJECT_DISTANCE
+          )
+        );
 
       return outVec;
     }
 
     /*
       ============================================================
-      PINCH
+      PINCH DETECTION
       ============================================================
     */
 
@@ -2292,7 +2854,7 @@
 
     /*
       ============================================================
-      CAMERA AND MODEL STARTUP
+      START APP
       ============================================================
     */
 
@@ -2313,52 +2875,11 @@
         "Accessing Camera...";
 
       try {
-        if (!video.srcObject) {
-          const stream =
-            await navigator.mediaDevices
-              .getUserMedia({
-                video: {
-                  facingMode: "user",
-                  width: {
-                    ideal: 1280
-                  },
-                  height: {
-                    ideal: 720
-                  }
-                },
-                audio: false
-              });
-
-          video.srcObject =
-            stream;
+        if (!currentStream) {
+          await startCamera(
+            "user"
+          );
         }
-
-        await video.play();
-
-        await new Promise(resolve => {
-          if (video.readyState >= 1) {
-            resolve();
-          } else {
-            video.onloadedmetadata =
-              resolve;
-          }
-        });
-
-        console.log(
-          "Camera information:",
-          {
-            videoWidth:
-              video.videoWidth,
-            videoHeight:
-              video.videoHeight,
-            viewportWidth:
-              window.innerWidth,
-            viewportHeight:
-              window.innerHeight,
-            devicePixelRatio:
-              window.devicePixelRatio
-          }
-        );
 
         loadingText.innerText =
           "Loading Vision Engine...";
@@ -2463,18 +2984,22 @@
       ============================================================
     */
 
-    function processPrecisionFrame(now) {
+    function processPrecisionFrame(
+      now
+    ) {
       const handResult =
-        handLandmarker.detectForVideo(
-          video,
-          now
-        );
+        handLandmarker
+          .detectForVideo(
+            video,
+            now
+          );
 
       if (
         handResult.landmarks &&
         handResult.landmarks.length > 0
       ) {
-        handVisible = true;
+        handVisible =
+          true;
 
         const handPoints =
           handResult.landmarks[0];
@@ -2497,26 +3022,37 @@
 
         if (isPinched) {
           pinchPosition
-            .copy(handWorldPositions[4])
-            .add(handWorldPositions[8])
-            .multiplyScalar(0.5);
+            .copy(
+              handWorldPositions[4]
+            )
+            .add(
+              handWorldPositions[8]
+            )
+            .multiplyScalar(
+              0.5
+            );
         }
       } else {
-        handVisible = false;
-        isPinched = false;
+        handVisible =
+          false;
+
+        isPinched =
+          false;
       }
 
       const faceResult =
-        faceLandmarker.detectForVideo(
-          video,
-          now
-        );
+        faceLandmarker
+          .detectForVideo(
+            video,
+            now
+          );
 
       if (
         faceResult.faceLandmarks &&
         faceResult.faceLandmarks.length > 0
       ) {
-        faceVisible = true;
+        faceVisible =
+          true;
 
         const facePoints =
           faceResult.faceLandmarks[0];
@@ -2532,10 +3068,12 @@
           );
         }
       } else {
-        faceVisible = false;
+        faceVisible =
+          false;
       }
 
-      poseVisible = false;
+      poseVisible =
+        false;
     }
 
     /*
@@ -2544,14 +3082,18 @@
       ============================================================
     */
 
-    function processHolisticFrame(now) {
+    function processHolisticFrame(
+      now
+    ) {
       const result =
-        holisticLandmarker.detectForVideo(
-          video,
-          now
-        );
+        holisticLandmarker
+          .detectForVideo(
+            video,
+            now
+          );
 
-      let handLandmarks = null;
+      let handLandmarks =
+        null;
 
       if (
         result.rightHandLandmarks &&
@@ -2573,7 +3115,8 @@
         handLandmarks &&
         handLandmarks.length === 21
       ) {
-        handVisible = true;
+        handVisible =
+          true;
 
         for (
           let i = 0;
@@ -2593,20 +3136,30 @@
 
         if (isPinched) {
           pinchPosition
-            .copy(handWorldPositions[4])
-            .add(handWorldPositions[8])
-            .multiplyScalar(0.5);
+            .copy(
+              handWorldPositions[4]
+            )
+            .add(
+              handWorldPositions[8]
+            )
+            .multiplyScalar(
+              0.5
+            );
         }
       } else {
-        handVisible = false;
-        isPinched = false;
+        handVisible =
+          false;
+
+        isPinched =
+          false;
       }
 
       if (
         result.faceLandmarks &&
         result.faceLandmarks.length > 0
       ) {
-        faceVisible = true;
+        faceVisible =
+          true;
 
         const facePoints =
           result.faceLandmarks[0] ||
@@ -2623,14 +3176,16 @@
           );
         }
       } else {
-        faceVisible = false;
+        faceVisible =
+          false;
       }
 
       if (
         result.poseLandmarks &&
         result.poseLandmarks.length > 0
       ) {
-        poseVisible = true;
+        poseVisible =
+          true;
 
         const posePoints =
           result.poseLandmarks[0] ||
@@ -2647,7 +3202,8 @@
           );
         }
       } else {
-        poseVisible = false;
+        poseVisible =
+          false;
       }
     }
 
@@ -2658,10 +3214,13 @@
     */
 
     function render() {
-      requestAnimationFrame(render);
+      requestAnimationFrame(
+        render
+      );
 
       if (
-        video.currentTime !== lastVideoTime &&
+        video.currentTime !==
+          lastVideoTime &&
         video.videoWidth > 0
       ) {
         lastVideoTime =
@@ -2677,13 +3236,17 @@
             handLandmarker &&
             faceLandmarker
           ) {
-            processPrecisionFrame(now);
+            processPrecisionFrame(
+              now
+            );
           } else if (
             activeEngine ===
               "holistic" &&
             holisticLandmarker
           ) {
-            processHolisticFrame(now);
+            processHolisticFrame(
+              now
+            );
           }
 
           badgeHand.className =
@@ -2718,15 +3281,20 @@
           Object.values(
             trackers
           ).forEach(tracker => {
-            let visible = false;
-            let sourceArray = null;
+            let visible =
+              false;
+
+            let sourceArray =
+              null;
 
             if (
               tracker.category ===
                 "hand" &&
               handVisible
             ) {
-              visible = true;
+              visible =
+                true;
+
               sourceArray =
                 handWorldPositions;
             } else if (
@@ -2734,7 +3302,9 @@
                 "face" &&
               faceVisible
             ) {
-              visible = true;
+              visible =
+                true;
+
               sourceArray =
                 faceWorldPositions;
             } else if (
@@ -2742,7 +3312,9 @@
                 "pose" &&
               poseVisible
             ) {
-              visible = true;
+              visible =
+                true;
+
               sourceArray =
                 poseWorldPositions;
             }
@@ -2751,7 +3323,8 @@
               visible &&
               sourceArray
             ) {
-              tracker.active = true;
+              tracker.active =
+                true;
 
               if (
                 tracker.landmark ===
@@ -2759,14 +3332,22 @@
               ) {
                 const average =
                   tracker.targetPos
-                    .set(0, 0, 0);
+                    .set(
+                      0,
+                      0,
+                      0
+                    );
 
                 PALM_LANDMARKS
-                  .forEach(index => {
-                    average.add(
-                      handWorldPositions[index]
-                    );
-                  });
+                  .forEach(
+                    index => {
+                      average.add(
+                        handWorldPositions[
+                          index
+                        ]
+                      );
+                    }
+                  );
 
                 average.multiplyScalar(
                   1 /
@@ -2784,12 +3365,15 @@
                 );
               }
             } else {
-              tracker.active = false;
+              tracker.active =
+                false;
             }
           });
 
           if (isPinched) {
-            setBallTarget("index");
+            setBallTarget(
+              "index"
+            );
           } else {
             const currentHolder =
               trackers[
@@ -2802,22 +3386,24 @@
             ) {
               Object.values(
                 trackers
-              ).forEach(other => {
-                if (
-                  other.id !==
-                    currentBallTargetId &&
-                  other.active &&
-                  currentHolder.targetPos
-                    .distanceTo(
-                      other.targetPos
-                    ) <
-                    PROXIMITY_TRANSFER_THRESHOLD
-                ) {
-                  setBallTarget(
-                    other.id
-                  );
+              ).forEach(
+                other => {
+                  if (
+                    other.id !==
+                      currentBallTargetId &&
+                    other.active &&
+                    currentHolder.targetPos
+                      .distanceTo(
+                        other.targetPos
+                      ) <
+                      PROXIMITY_TRANSFER_THRESHOLD
+                  ) {
+                    setBallTarget(
+                      other.id
+                    );
+                  }
                 }
-              });
+              );
             }
           }
         } catch (error) {
@@ -2916,11 +3502,14 @@
           ballPos
         );
 
-        if (ballScale < 1) {
+        if (
+          ballScale < 1
+        ) {
           ballScale =
             Math.min(
               1,
-              ballScale + 0.1
+              ballScale +
+                0.1
             );
         }
       } else if (
@@ -2936,11 +3525,14 @@
           ballPos
         );
 
-        if (ballScale < 1) {
+        if (
+          ballScale < 1
+        ) {
           ballScale =
             Math.min(
               1,
-              ballScale + 0.1
+              ballScale +
+                0.1
             );
         }
       } else if (
@@ -2949,14 +3541,18 @@
         ballScale =
           Math.max(
             0,
-            ballScale - 0.1
+            ballScale -
+              0.1
           );
       }
 
       ballMesh.scale.set(
-        ballScale * alignment.scale,
-        ballScale * alignment.scale,
-        ballScale * alignment.scale
+        ballScale *
+          alignment.scale,
+        ballScale *
+          alignment.scale,
+        ballScale *
+          alignment.scale
       );
 
       /*
@@ -3139,7 +3735,9 @@
       ============================================================
     */
 
-    if ("serviceWorker" in navigator) {
+    if (
+      "serviceWorker" in navigator
+    ) {
       window.addEventListener(
         "load",
         () => {
@@ -3153,7 +3751,8 @@
 
               document.getElementById(
                 "offline-tag"
-              ).style.display = "block";
+              ).style.display =
+                "block";
             })
             .catch(error => {
               console.error(
